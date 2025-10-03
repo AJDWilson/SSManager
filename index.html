@@ -1,1 +1,61 @@
-
++<!DOCTYPE html>
++<html lang="en">
++<head>
++  <meta charset="UTF-8">
++  <meta name="viewport" content="width=device-width, initial-scale=1.0">
++  <title>Yard Layout Planner</title>
++  <link rel="stylesheet" href="style.css">
++</head>
++<body>
++  <div class="app">
++    <aside class="sidebar" aria-label="Project sidebar">
++      <section class="yards-panel">
++        <div class="panel-header">
++          <h1>Yards</h1>
++          <div class="yard-actions">
++            <button id="newYardBtn" type="button">New Yard</button>
++            <button id="renameYardBtn" type="button">Rename</button>
++            <button id="duplicateYardBtn" type="button">Duplicate</button>
++            <button id="deleteYardBtn" type="button">Delete</button>
++          </div>
++        </div>
++        <ul id="yardList" class="yard-list" aria-label="Saved yards"></ul>
++      </section>
++
++      <section class="palette" aria-label="Container palette">
++        <h2>Container Palette</h2>
++        <p class="palette-hint">Drag a container into the yard.</p>
++        <div id="paletteItems" class="palette-items"></div>
++      </section>
++
++      <section class="legend" aria-label="Container legend">
++        <h2>Legend</h2>
++        <ul id="legendList"></ul>
++      </section>
++    </aside>
++
++    <main class="workspace">
++      <header class="workspace-header">
++        <div class="yard-summary" id="yardSummary" aria-live="polite"></div>
++        <div class="workspace-controls">
++          <label class="snap-toggle">
++            <input type="checkbox" id="snapToggle" checked>
++            <span>Snap to grid</span>
++          </label>
++          <span id="scaleInfo" class="scale-info" aria-live="polite"></span>
++        </div>
++      </header>
++
++      <div class="yard-wrapper" id="yardWrapper">
++        <div id="hint" class="hint" role="status" aria-live="polite"></div>
++        <svg id="yardSvg" class="yard-svg" tabindex="0" aria-label="Yard layout" preserveAspectRatio="xMidYMid meet"></svg>
++        <div id="emptyState" class="empty-state" hidden>
++          <p>No yard selected. Create a new yard to get started.</p>
++        </div>
++      </div>
++    </main>
++  </div>
++
++  <script type="module" src="script.js"></script>
++</body>
++</html>
