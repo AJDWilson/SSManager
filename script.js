@@ -1,14 +1,15 @@
 const STORAGE_KEY = 'yards_v1';
 const ACTIVE_KEY = 'yards_active_id_v1';
+const THEME_KEY = 'ssmanager_theme_v1';
 const containerDepthFt = 8;
 
 /** @type {const} */
 const containerTypes = [
-  { type: '5ft', widthFt: 5, color: '#8ecae6' },
-  { type: '10ft', widthFt: 10, color: '#a3bffa' },
-  { type: '20ft', widthFt: 20, color: '#facc15' },
-  { type: '40ft', widthFt: 40, color: '#f87171' },
-  { type: '50ft', widthFt: 50, color: '#c084fc' },
+  { type: '5ft', widthFt: 5 },
+  { type: '10ft', widthFt: 10 },
+  { type: '20ft', widthFt: 20 },
+  { type: '40ft', widthFt: 40 },
+  { type: '50ft', widthFt: 50 },
 ];
 
 const ftToUnitFactor = {
@@ -22,6 +23,7 @@ const state = {
   activeYardId: null,
   snapEnabled: true,
   scale: 1,
+  theme: 'light',
 };
 
 let selectedContainerId = null;
@@ -29,13 +31,13 @@ let currentDrag = null;
 let hintTimeout = null;
 
 const els = {
+  appShell: document.querySelector('.app-shell'),
   yardList: document.getElementById('yardList'),
   newYardBtn: document.getElementById('newYardBtn'),
   renameYardBtn: document.getElementById('renameYardBtn'),
   duplicateYardBtn: document.getElementById('duplicateYardBtn'),
   deleteYardBtn: document.getElementById('deleteYardBtn'),
   paletteItems: document.getElementById('paletteItems'),
-  legendList: document.getElementById('legendList'),
   snapToggle: document.getElementById('snapToggle'),
   yardSummary: document.getElementById('yardSummary'),
   scaleInfo: document.getElementById('scaleInfo'),
@@ -57,6 +59,12 @@ const els = {
   detailRenter: document.getElementById('detailRenter'),
   detailRate: document.getElementById('detailRate'),
   detailPhone: document.getElementById('detailPhone'),
+  detailOccupied: document.getElementById('detailOccupied'),
+  inventoryBody: document.getElementById('inventoryBody'),
+  overviewCount: document.getElementById('overviewCount'),
+  overviewOccupied: document.getElementById('overviewOccupied'),
+  overviewRevenue: document.getElementById('overviewRevenue'),
+  themeToggle: document.getElementById('themeToggle'),
 };
 const createYardTriggers = Array.from(document.querySelectorAll('[data-trigger="create-yard"]'));
 
@@ -65,7 +73,6 @@ init();
 function init() {
   loadState();
   renderPalette();
-  renderLegend();
   attachEventListeners();
   renderAll();
 }
@@ -83,10 +90,15 @@ function loadState() {
     if (activeId) {
       state.activeYardId = activeId;
     }
+    const storedTheme = localStorage.getItem(THEME_KEY);
+    if (storedTheme === 'light' || storedTheme === 'dark') {
+      state.theme = storedTheme;
+    }
   } catch (err) {
     console.warn('Failed to load yards from storage', err);
     state.yards = [];
     state.activeYardId = null;
+    state.theme = 'light';
   }
   if (!state.activeYardId && state.yards.length > 0) {
     state.activeYardId = state.yards[0].id;
@@ -98,6 +110,7 @@ function saveState() {
   if (state.activeYardId) {
     localStorage.setItem(ACTIVE_KEY, state.activeYardId);
   }
+  localStorage.setItem(THEME_KEY, state.theme);
 }
 
 function upgradeYard(yard) {
@@ -143,6 +156,10 @@ function upgradeContainer(container) {
     renter: container.renter ? String(container.renter) : '',
     monthlyRate: container.monthlyRate ? String(container.monthlyRate) : '',
     phone: container.phone ? String(container.phone) : '',
+    occupied:
+      typeof container.occupied === 'boolean'
+        ? container.occupied
+        : Boolean(container.renter && String(container.renter).trim()),
   };
 }
 
@@ -156,6 +173,15 @@ function attachEventListeners() {
     state.snapEnabled = els.snapToggle.checked;
     renderScaleInfo();
   });
+
+  if (els.themeToggle) {
+    els.themeToggle.addEventListener('change', () => {
+      state.theme = els.themeToggle.checked ? 'dark' : 'light';
+      applyTheme();
+      saveState();
+      renderActiveYard();
+    });
+  }
 
   els.yardSvg.addEventListener('pointerdown', (event) => {
     if (event.target === els.yardSvg) {
@@ -186,23 +212,34 @@ function attachEventListeners() {
 }
 
 function renderAll() {
+  applyTheme();
   renderYardList();
   renderActiveYard();
   renderScaleInfo();
+  renderInventory();
+  renderOverview();
   updateDetailPanel();
 }
 
 function renderPalette() {
   els.paletteItems.innerHTML = '';
+  const longest = Math.max(...containerTypes.map((type) => type.widthFt));
   containerTypes.forEach((type) => {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'palette-item';
     item.dataset.type = type.type;
-    item.innerHTML = `
-      <span>${type.widthFt} ft container</span>
-      <span class="swatch" style="background:${type.color}"></span>
-    `;
+    item.setAttribute('aria-label', `${type.widthFt} ft container`);
+    const mini = document.createElement('span');
+    mini.className = 'palette-mini';
+    const relative = Math.max((type.widthFt / longest) * 72, 16);
+    mini.style.width = `${relative}px`;
+
+    const label = document.createElement('span');
+    label.textContent = `${type.widthFt} ft container`;
+
+    item.appendChild(mini);
+    item.appendChild(label);
     item.addEventListener('pointerdown', (event) => startPaletteDrag(event, type));
     item.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -214,24 +251,21 @@ function renderPalette() {
   });
 }
 
-function renderLegend() {
-  els.legendList.innerHTML = '';
-  containerTypes.forEach((type) => {
-    const li = document.createElement('li');
-    li.innerHTML = `
-      <span class="swatch" style="background:${type.color}"></span>
-      <span>${type.widthFt} ft container</span>
-    `;
-    els.legendList.appendChild(li);
-  });
-}
-
 function renderYardList() {
   els.yardList.innerHTML = '';
   state.yards.forEach((yard) => {
     const li = document.createElement('li');
     const button = document.createElement('button');
-    button.textContent = `${yard.name}`;
+    const title = document.createElement('span');
+    title.className = 'yard-name';
+    title.textContent = yard.name;
+
+    const meta = document.createElement('span');
+    meta.className = 'yard-meta';
+    meta.textContent = `${formatNumber(yard.width)}×${formatNumber(yard.height)} ${yard.unit}`;
+
+    button.appendChild(title);
+    button.appendChild(meta);
     button.classList.toggle('active', yard.id === state.activeYardId);
     button.addEventListener('click', () => {
       state.activeYardId = yard.id;
@@ -284,11 +318,15 @@ function renderActiveYard() {
   } else {
     selectContainer(null);
   }
-  els.yardSummary.textContent = `${yard.name} — ${yard.width} × ${yard.height} ${yard.unit}`;
+  const dims = `${formatNumber(yard.width)} × ${formatNumber(yard.height)} ${yard.unit}`;
+  els.yardSummary.textContent = `${yard.name} • ${dims} • ${yard.containers.length} container${yard.containers.length === 1 ? '' : 's'}`;
 }
 
 function renderGrid(yard) {
   const gridSize = gridUnit(yard.unit);
+  const isDark = state.theme === 'dark';
+  const gridStroke = isDark ? '#334155' : '#cbd5e1';
+  const borderStroke = isDark ? '#475569' : '#94a3b8';
   const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
   const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
   pattern.setAttribute('id', 'grid-pattern');
@@ -300,7 +338,7 @@ function renderGrid(yard) {
   rect.setAttribute('width', gridSize);
   rect.setAttribute('height', gridSize);
   rect.setAttribute('fill', 'none');
-  rect.setAttribute('stroke', '#cbd5e1');
+  rect.setAttribute('stroke', gridStroke);
   rect.setAttribute('stroke-width', 0.03);
 
   pattern.appendChild(rect);
@@ -311,7 +349,7 @@ function renderGrid(yard) {
   background.setAttribute('width', yard.width);
   background.setAttribute('height', yard.height);
   background.setAttribute('fill', 'url(#grid-pattern)');
-  background.setAttribute('stroke', '#94a3b8');
+  background.setAttribute('stroke', borderStroke);
   background.setAttribute('stroke-width', 0.1);
   els.yardSvg.appendChild(background);
 }
@@ -322,12 +360,14 @@ function renderContainers(yard) {
     group.classList.add('container-group');
     group.dataset.id = container.id;
     group.dataset.type = container.type;
+    group.classList.toggle('is-occupied', Boolean(container.occupied));
     group.setAttribute('tabindex', '0');
     group.setAttribute('role', 'button');
     group.setAttribute('aria-label', `${container.label} container`);
 
     const dims = getContainerDimensions(yard, container);
-    const palette = containerTypes.find((type) => type.type === container.type);
+    const fill = container.occupied ? '#22c55e' : '#ef4444';
+    const stroke = container.occupied ? '#15803d' : '#b91c1c';
 
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.classList.add('container-rect');
@@ -335,7 +375,9 @@ function renderContainers(yard) {
     rect.setAttribute('height', dims.height);
     rect.setAttribute('rx', 0.2);
     rect.setAttribute('ry', 0.2);
-    rect.setAttribute('fill', palette?.color || '#cbd5f5');
+    rect.setAttribute('fill', fill);
+    rect.setAttribute('stroke', stroke);
+    rect.setAttribute('stroke-width', 0.1);
 
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.classList.add('container-label');
@@ -343,6 +385,8 @@ function renderContainers(yard) {
     text.setAttribute('y', dims.height / 2);
     text.setAttribute('dominant-baseline', 'middle');
     text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('fill', '#f8fafc');
+    text.setAttribute('font-size', Math.max(Math.min(dims.width, dims.height) * 0.4, 0.6));
     const labelText = container.label && String(container.label).trim() ? String(container.label).trim() : `${container.widthFt}`;
     text.textContent = labelText;
 
@@ -374,6 +418,87 @@ function renderScaleInfo() {
   els.snapToggle.checked = state.snapEnabled;
 }
 
+function renderInventory() {
+  if (!els.inventoryBody) return;
+  const yard = getActiveYard();
+  els.inventoryBody.innerHTML = '';
+  if (!yard) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 4;
+    cell.textContent = 'Create or select a yard to begin.';
+    row.appendChild(cell);
+    els.inventoryBody.appendChild(row);
+    return;
+  }
+  if (yard.containers.length === 0) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 4;
+    cell.textContent = 'No containers placed yet.';
+    row.appendChild(cell);
+    els.inventoryBody.appendChild(row);
+    return;
+  }
+
+  const sorted = [...yard.containers].sort((a, b) => {
+    const labelA = (a.label || `${a.widthFt}`).toLowerCase();
+    const labelB = (b.label || `${b.widthFt}`).toLowerCase();
+    return labelA.localeCompare(labelB);
+  });
+
+  sorted.forEach((container) => {
+    const row = document.createElement('tr');
+    row.classList.add(container.occupied ? 'occupied-row' : 'vacant-row');
+    const nameCell = document.createElement('td');
+    nameCell.setAttribute('scope', 'row');
+    nameCell.textContent = container.label && container.label.trim() ? container.label.trim() : `${container.widthFt} ft`;
+
+    const renterCell = document.createElement('td');
+    renterCell.textContent = container.occupied
+      ? container.renter && container.renter.trim()
+        ? container.renter.trim()
+        : 'Occupied'
+      : 'Vacant';
+
+    const phoneCell = document.createElement('td');
+    phoneCell.textContent = container.occupied && container.phone ? container.phone : '—';
+
+    const rateCell = document.createElement('td');
+    rateCell.className = 'numeric';
+    const rateValue = parseFloat(container.monthlyRate);
+    rateCell.textContent = container.occupied && Number.isFinite(rateValue) ? formatCurrency(rateValue) : '—';
+
+    row.appendChild(nameCell);
+    row.appendChild(renterCell);
+    row.appendChild(phoneCell);
+    row.appendChild(rateCell);
+    els.inventoryBody.appendChild(row);
+  });
+}
+
+function renderOverview() {
+  if (!els.overviewCount || !els.overviewOccupied || !els.overviewRevenue) return;
+  const yard = getActiveYard();
+  if (!yard) {
+    els.overviewCount.textContent = '0';
+    els.overviewOccupied.textContent = '0';
+    els.overviewRevenue.textContent = '$0.00';
+    return;
+  }
+  const total = yard.containers.length;
+  const occupied = yard.containers.filter((container) => container.occupied).length;
+  const revenue = yard.containers.reduce((sum, container) => {
+    if (!container.occupied) return sum;
+    const value = parseFloat(container.monthlyRate);
+    return Number.isFinite(value) ? sum + value : sum;
+  }, 0);
+
+  els.overviewCount.textContent = `${total}`;
+  els.overviewOccupied.textContent = `${occupied}`;
+  els.overviewRevenue.textContent = formatCurrency(revenue);
+}
+
 function startPaletteDrag(event, type) {
   event.preventDefault();
   const pointerId = event.pointerId;
@@ -401,7 +526,7 @@ function startPaletteDragFromKeyboard(type) {
     yard.containers.push(container);
     saveState();
     selectedContainerId = container.id;
-    renderActiveYard();
+    renderAll();
   } else {
     showHint('No free space at the origin. Move existing containers.');
   }
@@ -485,7 +610,7 @@ function finishPaletteDrag(event) {
   yard.containers.push(container);
   saveState();
   selectedContainerId = container.id;
-  renderActiveYard();
+  renderAll();
   currentDrag = null;
 }
 
@@ -664,7 +789,7 @@ function removeSelectedContainer() {
   if (idx >= 0) {
     yard.containers.splice(idx, 1);
     saveState();
-    renderActiveYard();
+    renderAll();
     showHint('Container removed.');
   }
 }
@@ -809,11 +934,24 @@ function updateDetailPanel() {
   els.detailRenter.value = container.renter || '';
   els.detailRate.value = container.monthlyRate || '';
   els.detailPhone.value = container.phone || '';
+  els.detailOccupied.checked = Boolean(container.occupied);
+  setOccupiedFieldState(Boolean(container.occupied));
 }
 
 function setDetailFormDisabled(disabled) {
+  if (!els.containerForm) return;
   Array.from(els.containerForm.elements).forEach((element) => {
     element.disabled = disabled;
+  });
+}
+
+function setOccupiedFieldState(occupied) {
+  if (!els.containerForm) return;
+  const targets = [els.detailRenter, els.detailRate, els.detailPhone];
+  targets.forEach((input) => {
+    if (!input) return;
+    input.disabled = !occupied;
+    input.classList.toggle('input-disabled', !occupied);
   });
 }
 
@@ -832,20 +970,45 @@ function handleDetailInput(event) {
     case 'label':
       container.label = value;
       updateContainerLabelDisplay(container);
+      renderInventory();
       break;
     case 'renter':
       container.renter = value;
+      renderInventory();
       break;
     case 'monthlyRate':
       container.monthlyRate = value;
+      renderInventory();
+      renderOverview();
       break;
     case 'phone':
       container.phone = value;
+      renderInventory();
       break;
+    case 'occupied': {
+      const checked = target.checked;
+      container.occupied = checked;
+      setOccupiedFieldState(checked);
+      if (!checked) {
+        container.renter = '';
+        container.monthlyRate = '';
+        container.phone = '';
+        els.detailRenter.value = '';
+        els.detailRate.value = '';
+        els.detailPhone.value = '';
+      }
+      renderActiveYard();
+      renderInventory();
+      renderOverview();
+      break;
+    }
     default:
       break;
   }
   saveState();
+  if (name !== 'occupied' && name !== 'monthlyRate') {
+    renderOverview();
+  }
 }
 
 function updateContainerLabelDisplay(container) {
@@ -902,6 +1065,7 @@ function createContainerFromType(yard, type) {
     renter: '',
     monthlyRate: '',
     phone: '',
+    occupied: false,
   };
 }
 
@@ -990,7 +1154,7 @@ function createGhost(type) {
   const ghost = document.createElement('div');
   ghost.className = 'drag-ghost';
   ghost.textContent = `${type.widthFt} ft`;
-  ghost.style.borderColor = type.color;
+  ghost.style.borderColor = '#94a3b8';
   return ghost;
 }
 
@@ -1009,6 +1173,22 @@ function formatNumber(value) {
   return Number(rounded.toString()).toString();
 }
 
+function formatCurrency(value) {
+  const safe = Number.isFinite(value) ? value : 0;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+  }).format(safe);
+}
+
 function generateId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function applyTheme() {
+  if (!els.appShell || !els.themeToggle) return;
+  const theme = state.theme === 'dark' ? 'dark' : 'light';
+  els.appShell.setAttribute('data-theme', theme);
+  els.themeToggle.checked = theme === 'dark';
 }

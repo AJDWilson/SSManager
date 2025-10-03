@@ -3,20 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Yard Layout Planner</title>
+  <title>SSManager</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-shell">
+  <div class="app-shell" data-theme="light">
     <header class="app-header">
       <div class="brand-block">
-        <div class="brand-mark" aria-hidden="true">YL</div>
+        <div class="brand-mark" aria-hidden="true">SS</div>
         <div class="brand-copy">
-          <h1>Yard Layout Planner</h1>
-          <p>Design and manage modern container yards</p>
+          <h1>SSManager</h1>
+          <p>Precision yard orchestration</p>
         </div>
       </div>
       <div class="header-actions">
+        <label class="switch switch-theme" for="themeToggle">
+          <input type="checkbox" id="themeToggle" aria-label="Toggle dark mode">
+          <span class="switch-slider"></span>
+          <span class="switch-label">Dark mode</span>
+        </label>
         <button id="newYardBtn" type="button" class="btn btn-primary">Create Yard</button>
       </div>
     </header>
@@ -25,7 +30,7 @@
       <aside class="panel panel-left" aria-label="Projects and palette">
         <section class="panel-section">
           <div class="section-header">
-            <h2>Projects</h2>
+            <h2>Yards</h2>
             <div class="section-actions">
               <button id="renameYardBtn" type="button" class="btn btn-ghost">Rename</button>
               <button id="duplicateYardBtn" type="button" class="btn btn-ghost">Duplicate</button>
@@ -37,53 +42,83 @@
 
         <section class="panel-section palette" aria-label="Container palette">
           <div class="section-header">
-            <h2>Container Palette</h2>
-            <span class="section-hint">Drag into the yard to place</span>
+            <h2>Containers</h2>
+            <span class="section-hint">Drag to add</span>
           </div>
           <div id="paletteItems" class="palette-items"></div>
-        </section>
-
-        <section class="panel-section legend" aria-label="Container legend">
-          <div class="section-header">
-            <h2>Legend</h2>
-          </div>
-          <ul id="legendList" class="legend-list"></ul>
         </section>
       </aside>
 
       <main class="workspace" aria-label="Yard workspace">
-        <div class="workspace-bar">
-          <div class="yard-summary" id="yardSummary" aria-live="polite"></div>
-          <div class="workspace-controls">
-            <label class="switch">
-              <input type="checkbox" id="snapToggle" checked>
-              <span class="switch-slider"></span>
-              <span class="switch-label">Snap to grid</span>
-            </label>
-            <span id="scaleInfo" class="scale-info" aria-live="polite"></span>
+        <div class="workspace-stack">
+          <div class="workspace-bar">
+            <div class="yard-summary" id="yardSummary" aria-live="polite"></div>
+            <div class="workspace-controls">
+              <label class="switch">
+                <input type="checkbox" id="snapToggle" checked>
+                <span class="switch-slider"></span>
+                <span class="switch-label">Snap to grid</span>
+              </label>
+              <span id="scaleInfo" class="scale-info" aria-live="polite"></span>
+            </div>
           </div>
-        </div>
 
-        <section class="workspace-help" aria-live="polite">
-          <h2 class="sr-only">Keyboard and interaction help</h2>
-          <ul class="help-chips">
-            <li><span class="key">Delete</span> remove</li>
-            <li><span class="key">← → ↑ ↓</span> nudge</li>
-            <li><span class="key">R</span> rotate 90°</li>
-          </ul>
-        </section>
+          <section class="workspace-help" aria-live="polite">
+            <h2 class="sr-only">Keyboard and interaction help</h2>
+            <ul class="help-chips">
+              <li><span class="key">Delete</span> remove</li>
+              <li><span class="key">← → ↑ ↓</span> nudge</li>
+              <li><span class="key">R</span> rotate 90°</li>
+            </ul>
+          </section>
 
-        <div class="yard-wrapper" id="yardWrapper">
-          <div id="hint" class="hint" role="status" aria-live="polite"></div>
-          <svg id="yardSvg" class="yard-svg" tabindex="0" aria-label="Yard layout" preserveAspectRatio="xMidYMid meet"></svg>
-          <div id="emptyState" class="empty-state">
-            <div class="empty-card">
-              <h3>No yard selected</h3>
-              <p>Create a yard to begin arranging containers.</p>
-              <button type="button" class="btn btn-primary" data-trigger="create-yard">Create Yard</button>
+          <div class="yard-wrapper" id="yardWrapper">
+            <div id="hint" class="hint" role="status" aria-live="polite"></div>
+            <svg id="yardSvg" class="yard-svg" tabindex="0" aria-label="Yard layout" preserveAspectRatio="xMidYMid meet"></svg>
+            <div id="emptyState" class="empty-state">
+              <div class="empty-card">
+                <h3>No yard selected</h3>
+                <p>Create a yard to begin arranging containers.</p>
+                <button type="button" class="btn btn-primary" data-trigger="create-yard">Create Yard</button>
+              </div>
             </div>
           </div>
         </div>
+
+        <section class="inventory-panel" aria-label="Container roster">
+          <header class="inventory-header">
+            <h2>Container Roster</h2>
+            <p>Scroll to review occupants and contact information.</p>
+          </header>
+          <div class="inventory-table-wrapper">
+            <table class="inventory-table">
+              <thead>
+                <tr>
+                  <th scope="col">Container</th>
+                  <th scope="col">Renter</th>
+                  <th scope="col">Phone</th>
+                  <th scope="col" class="numeric">Monthly rate</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryBody"></tbody>
+            </table>
+          </div>
+          <section class="inventory-overview" aria-live="polite">
+            <h3>Monthly overview</h3>
+            <div class="overview-row">
+              <span>Total containers</span>
+              <strong id="overviewCount">0</strong>
+            </div>
+            <div class="overview-row">
+              <span>Occupied</span>
+              <strong id="overviewOccupied">0</strong>
+            </div>
+            <div class="overview-row">
+              <span>Monthly revenue</span>
+              <strong id="overviewRevenue">$0.00</strong>
+            </div>
+          </section>
+        </section>
       </main>
 
       <aside class="panel panel-right" aria-label="Container details">
@@ -95,6 +130,13 @@
             <p>Select a container to edit its info.</p>
           </div>
           <form id="containerForm" class="detail-form" hidden>
+            <div class="form-row">
+              <label class="switch">
+                <input id="detailOccupied" name="occupied" type="checkbox">
+                <span class="switch-slider"></span>
+                <span class="switch-label">Container occupied</span>
+              </label>
+            </div>
             <div class="form-row">
               <label for="detailTitle">Container title</label>
               <input id="detailTitle" name="label" type="text" autocomplete="off" required placeholder="Container number">
