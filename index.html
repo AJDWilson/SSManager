@@ -7,58 +7,145 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app">
-    <aside class="sidebar" aria-label="Project sidebar">
-      <section class="yards-panel" aria-labelledby="yardsHeading">
-        <div class="panel-header">
-          <h1 id="yardsHeading">Yards</h1>
-          <div class="yard-actions">
-            <button id="newYardBtn" type="button">New Yard</button>
-            <button id="renameYardBtn" type="button">Rename</button>
-            <button id="duplicateYardBtn" type="button">Duplicate</button>
-            <button id="deleteYardBtn" type="button">Delete</button>
-          </div>
-        </div>
-        <ul id="yardList" class="yard-list" aria-label="Saved yards"></ul>
-      </section>
-
-      <section class="palette" aria-label="Container palette">
-        <h2>Container Palette</h2>
-        <p class="palette-hint">Drag a container into the yard below. Containers snap to the grid when snapping is enabled.</p>
-        <div id="paletteItems" class="palette-items"></div>
-      </section>
-
-      <section class="legend" aria-label="Container legend">
-        <h2>Legend</h2>
-        <ul id="legendList"></ul>
-      </section>
-    </aside>
-
-    <main class="workspace">
-      <header class="workspace-header">
-        <div class="yard-summary" id="yardSummary" aria-live="polite"></div>
-        <div class="workspace-controls">
-          <label class="snap-toggle">
-            <input type="checkbox" id="snapToggle" checked>
-            <span>Snap to grid</span>
-          </label>
-          <span id="scaleInfo" class="scale-info" aria-live="polite"></span>
-        </div>
-      </header>
-
-      <section class="workspace-help" aria-live="polite">
-        <h2 class="sr-only">Keyboard and interaction help</h2>
-        <p>Use the Delete key to remove the selected container. Arrow keys nudge by one grid unit. Press “R” to rotate 90 degrees.</p>
-      </section>
-
-      <div class="yard-wrapper" id="yardWrapper">
-        <div id="hint" class="hint" role="status" aria-live="polite"></div>
-        <svg id="yardSvg" class="yard-svg" tabindex="0" aria-label="Yard layout" preserveAspectRatio="xMidYMid meet"></svg>
-        <div id="emptyState" class="empty-state" hidden>
-          <p>No yard selected. Create a new yard to get started.</p>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true">YL</div>
+        <div class="brand-copy">
+          <h1>Yard Layout Planner</h1>
+          <p>Design and manage modern container yards</p>
         </div>
       </div>
-    </main>
+      <div class="header-actions">
+        <button id="newYardBtn" type="button" class="btn btn-primary">Create Yard</button>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <aside class="panel panel-left" aria-label="Projects and palette">
+        <section class="panel-section">
+          <div class="section-header">
+            <h2>Projects</h2>
+            <div class="section-actions">
+              <button id="renameYardBtn" type="button" class="btn btn-ghost">Rename</button>
+              <button id="duplicateYardBtn" type="button" class="btn btn-ghost">Duplicate</button>
+              <button id="deleteYardBtn" type="button" class="btn btn-danger">Delete</button>
+            </div>
+          </div>
+          <ul id="yardList" class="yard-list" aria-label="Saved yards"></ul>
+        </section>
+
+        <section class="panel-section palette" aria-label="Container palette">
+          <div class="section-header">
+            <h2>Container Palette</h2>
+            <span class="section-hint">Drag into the yard to place</span>
+          </div>
+          <div id="paletteItems" class="palette-items"></div>
+        </section>
+
+        <section class="panel-section legend" aria-label="Container legend">
+          <div class="section-header">
+            <h2>Legend</h2>
+          </div>
+          <ul id="legendList" class="legend-list"></ul>
+        </section>
+      </aside>
+
+      <main class="workspace" aria-label="Yard workspace">
+        <div class="workspace-bar">
+          <div class="yard-summary" id="yardSummary" aria-live="polite"></div>
+          <div class="workspace-controls">
+            <label class="switch">
+              <input type="checkbox" id="snapToggle" checked>
+              <span class="switch-slider"></span>
+              <span class="switch-label">Snap to grid</span>
+            </label>
+            <span id="scaleInfo" class="scale-info" aria-live="polite"></span>
+          </div>
+        </div>
+
+        <section class="workspace-help" aria-live="polite">
+          <h2 class="sr-only">Keyboard and interaction help</h2>
+          <ul class="help-chips">
+            <li><span class="key">Delete</span> remove</li>
+            <li><span class="key">← → ↑ ↓</span> nudge</li>
+            <li><span class="key">R</span> rotate 90°</li>
+          </ul>
+        </section>
+
+        <div class="yard-wrapper" id="yardWrapper">
+          <div id="hint" class="hint" role="status" aria-live="polite"></div>
+          <svg id="yardSvg" class="yard-svg" tabindex="0" aria-label="Yard layout" preserveAspectRatio="xMidYMid meet"></svg>
+          <div id="emptyState" class="empty-state">
+            <div class="empty-card">
+              <h3>No yard selected</h3>
+              <p>Create a yard to begin arranging containers.</p>
+              <button type="button" class="btn btn-primary" data-trigger="create-yard">Create Yard</button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <aside class="panel panel-right" aria-label="Container details">
+        <section class="panel-section details-panel">
+          <div class="section-header">
+            <h2>Container Details</h2>
+          </div>
+          <div id="detailPlaceholder" class="detail-placeholder">
+            <p>Select a container to edit its info.</p>
+          </div>
+          <form id="containerForm" class="detail-form" hidden>
+            <div class="form-row">
+              <label for="detailTitle">Container title</label>
+              <input id="detailTitle" name="label" type="text" autocomplete="off" required placeholder="Container number">
+            </div>
+            <div class="form-row">
+              <label for="detailRenter">Rented by</label>
+              <input id="detailRenter" name="renter" type="text" autocomplete="off" placeholder="Client name">
+            </div>
+            <div class="form-row">
+              <label for="detailRate">Monthly rate</label>
+              <input id="detailRate" name="monthlyRate" type="number" min="0" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-row">
+              <label for="detailPhone">Client phone</label>
+              <input id="detailPhone" name="phone" type="tel" autocomplete="off" placeholder="(555) 123-4567">
+            </div>
+          </form>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <div id="yardModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="yardModalTitle" hidden>
+    <div class="modal">
+      <form id="yardForm" class="modal-content">
+        <header class="modal-header">
+          <h2 id="yardModalTitle">Create a Yard</h2>
+          <button type="button" class="btn-icon" id="yardModalClose" aria-label="Close create yard dialog">×</button>
+        </header>
+        <div class="modal-body">
+          <div class="form-grid">
+            <label for="yardNameInput">Yard name</label>
+            <input id="yardNameInput" name="name" type="text" required>
+            <label for="yardWidthInput">Width</label>
+            <input id="yardWidthInput" name="width" type="number" min="1" step="0.01" required>
+            <label for="yardHeightInput">Height</label>
+            <input id="yardHeightInput" name="height" type="number" min="1" step="0.01" required>
+            <label for="yardUnitSelect">Units</label>
+            <select id="yardUnitSelect" name="unit" required>
+              <option value="ft">Feet (ft)</option>
+              <option value="m">Meters (m)</option>
+              <option value="cm">Centimeters (cm)</option>
+            </select>
+          </div>
+        </div>
+        <footer class="modal-footer">
+          <button type="button" class="btn" id="yardModalCancel">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create yard</button>
+        </footer>
+      </form>
+    </div>
   </div>
 
   <script type="module" src="script.js"></script>

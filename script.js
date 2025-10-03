@@ -43,7 +43,22 @@ const els = {
   yardSvg: document.getElementById('yardSvg'),
   emptyState: document.getElementById('emptyState'),
   yardWrapper: document.getElementById('yardWrapper'),
+  yardModal: document.getElementById('yardModal'),
+  yardForm: document.getElementById('yardForm'),
+  yardNameInput: document.getElementById('yardNameInput'),
+  yardWidthInput: document.getElementById('yardWidthInput'),
+  yardHeightInput: document.getElementById('yardHeightInput'),
+  yardUnitSelect: document.getElementById('yardUnitSelect'),
+  yardModalClose: document.getElementById('yardModalClose'),
+  yardModalCancel: document.getElementById('yardModalCancel'),
+  detailPlaceholder: document.getElementById('detailPlaceholder'),
+  containerForm: document.getElementById('containerForm'),
+  detailTitle: document.getElementById('detailTitle'),
+  detailRenter: document.getElementById('detailRenter'),
+  detailRate: document.getElementById('detailRate'),
+  detailPhone: document.getElementById('detailPhone'),
 };
+const createYardTriggers = Array.from(document.querySelectorAll('[data-trigger="create-yard"]'));
 
 init();
 
@@ -61,7 +76,7 @@ function loadState() {
     if (stored) {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
-        state.yards = parsed;
+        state.yards = parsed.map(upgradeYard).filter(Boolean);
       }
     }
     const activeId = localStorage.getItem(ACTIVE_KEY);
@@ -85,8 +100,55 @@ function saveState() {
   }
 }
 
+function upgradeYard(yard) {
+  if (!yard || typeof yard !== 'object') {
+    return null;
+  }
+  const width = Number(yard.width);
+  const height = Number(yard.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+  const safeUnit = ['ft', 'm', 'cm'].includes(yard.unit) ? yard.unit : 'ft';
+  const name = typeof yard.name === 'string' && yard.name.trim() ? yard.name.trim() : 'Untitled Yard';
+  return {
+    ...yard,
+    name,
+    width: Number(width.toFixed(3)),
+    height: Number(height.toFixed(3)),
+    unit: safeUnit,
+    containers: Array.isArray(yard.containers)
+      ? yard.containers.map(upgradeContainer).filter(Boolean)
+      : [],
+  };
+}
+
+function upgradeContainer(container) {
+  if (!container || typeof container !== 'object') {
+    return null;
+  }
+  const widthFt = Number(container.widthFt) || Number(container.width) || 10;
+  const baseLabel =
+    typeof container.label === 'string' && container.label.trim()
+      ? container.label.trim()
+      : `${widthFt}`;
+  return {
+    id: container.id || generateId(),
+    type: container.type || `${widthFt}ft`,
+    widthFt,
+    x: Number.isFinite(container.x) ? container.x : 0,
+    y: Number.isFinite(container.y) ? container.y : 0,
+    rotation: container.rotation === 90 ? 90 : 0,
+    label: baseLabel,
+    renter: container.renter ? String(container.renter) : '',
+    monthlyRate: container.monthlyRate ? String(container.monthlyRate) : '',
+    phone: container.phone ? String(container.phone) : '',
+  };
+}
+
 function attachEventListeners() {
-  els.newYardBtn.addEventListener('click', handleCreateYard);
+  els.newYardBtn.addEventListener('click', openYardModal);
+  createYardTriggers.forEach((button) => button.addEventListener('click', openYardModal));
   els.renameYardBtn.addEventListener('click', handleRenameYard);
   els.duplicateYardBtn.addEventListener('click', handleDuplicateYard);
   els.deleteYardBtn.addEventListener('click', handleDeleteYard);
@@ -107,14 +169,27 @@ function attachEventListeners() {
 
   document.addEventListener('pointermove', handleGlobalPointerMove);
   document.addEventListener('pointerup', handleGlobalPointerUp);
-  document.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('keydown', handleGlobalKeyDown);
   window.addEventListener('resize', () => renderActiveYard());
+
+  els.yardForm.addEventListener('submit', handleYardFormSubmit);
+  els.yardModalClose.addEventListener('click', closeYardModal);
+  els.yardModalCancel.addEventListener('click', closeYardModal);
+  els.yardModal.addEventListener('click', (event) => {
+    if (event.target === els.yardModal) {
+      closeYardModal();
+    }
+  });
+
+  els.containerForm.addEventListener('input', handleDetailInput);
+  els.containerForm.addEventListener('submit', (event) => event.preventDefault());
 }
 
 function renderAll() {
   renderYardList();
   renderActiveYard();
   renderScaleInfo();
+  updateDetailPanel();
 }
 
 function renderPalette() {
@@ -248,8 +323,11 @@ function renderContainers(yard) {
     group.dataset.id = container.id;
     group.dataset.type = container.type;
     group.setAttribute('tabindex', '0');
+    group.setAttribute('role', 'button');
+    group.setAttribute('aria-label', `${container.label} container`);
 
     const dims = getContainerDimensions(yard, container);
+    const palette = containerTypes.find((type) => type.type === container.type);
 
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.classList.add('container-rect');
@@ -257,6 +335,7 @@ function renderContainers(yard) {
     rect.setAttribute('height', dims.height);
     rect.setAttribute('rx', 0.2);
     rect.setAttribute('ry', 0.2);
+    rect.setAttribute('fill', palette?.color || '#cbd5f5');
 
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.classList.add('container-label');
@@ -264,7 +343,8 @@ function renderContainers(yard) {
     text.setAttribute('y', dims.height / 2);
     text.setAttribute('dominant-baseline', 'middle');
     text.setAttribute('text-anchor', 'middle');
-    text.textContent = `${container.widthFt} ft${container.rotation === 90 ? ' ⟳' : ''}`;
+    const labelText = container.label && String(container.label).trim() ? String(container.label).trim() : `${container.widthFt}`;
+    text.textContent = labelText;
 
     group.appendChild(rect);
     group.appendChild(text);
@@ -290,7 +370,7 @@ function renderScaleInfo() {
   }
   const unitStep = gridUnit(yard.unit);
   const gridLabel = formatNumber(unitStep);
-  els.scaleInfo.textContent = `Grid: 1 ft = ${gridLabel} ${yard.unit} (${state.snapEnabled ? 'snap on' : 'snap off'})`;
+  els.scaleInfo.textContent = `Scale: 1 grid ≈ ${gridLabel} ${yard.unit} (${state.snapEnabled ? 'snap on' : 'snap off'})`;
   els.snapToggle.checked = state.snapEnabled;
 }
 
@@ -495,11 +575,15 @@ function handlePointerUp(event) {
 }
 
 function handleKeyDown(event) {
+  const target = event.target;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+    return;
+  }
   const yard = getActiveYard();
   if (!yard || !selectedContainerId) return;
   const container = getContainerById(yard, selectedContainerId);
   if (!container) return;
-  const step = state.snapEnabled ? gridUnit(yard.unit) : gridUnit(yard.unit);
+  const step = gridUnit(yard.unit);
   let handled = false;
   switch (event.key) {
     case 'Delete':
@@ -601,21 +685,7 @@ function startYard(name, width, height, unit) {
 }
 
 function handleCreateYard() {
-  const name = prompt('Yard name', `Yard ${state.yards.length + 1}`);
-  if (!name) return;
-  const width = parseFloat(prompt('Width', '100'));
-  const height = parseFloat(prompt('Height', '60'));
-  const unit = prompt('Unit (ft, m, cm)', 'ft');
-  const sanitizedUnit = (unit || 'ft').trim().toLowerCase();
-  if (!['ft', 'm', 'cm'].includes(sanitizedUnit)) {
-    showHint('Invalid unit. Choose ft, m, or cm.');
-    return;
-  }
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    showHint('Width and height must be positive numbers.');
-    return;
-  }
-  startYard(name.trim(), Number(width.toFixed(3)), Number(height.toFixed(3)), sanitizedUnit);
+  openYardModal();
 }
 
 function handleRenameYard() {
@@ -656,11 +726,163 @@ function handleDeleteYard() {
   renderAll();
 }
 
+function openYardModal() {
+  const template = getActiveYard();
+  els.yardForm.reset();
+  const defaultName = `Yard ${state.yards.length + 1}`;
+  els.yardNameInput.value = defaultName;
+  const widthValue = template ? template.width : 100;
+  const heightValue = template ? template.height : 60;
+  const unitValue = template ? template.unit : 'ft';
+  els.yardWidthInput.value = widthValue;
+  els.yardHeightInput.value = heightValue;
+  els.yardUnitSelect.value = ['ft', 'm', 'cm'].includes(unitValue) ? unitValue : 'ft';
+  els.yardModal.hidden = false;
+  window.setTimeout(() => {
+    els.yardNameInput.focus();
+    els.yardNameInput.select();
+  }, 0);
+}
+
+function closeYardModal() {
+  if (els.yardModal.hidden) return;
+  els.yardModal.hidden = true;
+}
+
+function isModalOpen() {
+  return !els.yardModal.hidden;
+}
+
+function handleYardFormSubmit(event) {
+  event.preventDefault();
+  const name = els.yardNameInput.value.trim();
+  const width = parseFloat(els.yardWidthInput.value);
+  const height = parseFloat(els.yardHeightInput.value);
+  const unit = els.yardUnitSelect.value;
+  if (!name) {
+    showHint('Please enter a yard name.');
+    els.yardNameInput.focus();
+    return;
+  }
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    showHint('Width and height must be positive numbers.');
+    els.yardWidthInput.focus();
+    return;
+  }
+  if (!['ft', 'm', 'cm'].includes(unit)) {
+    showHint('Units must be ft, m, or cm.');
+    els.yardUnitSelect.focus();
+    return;
+  }
+  closeYardModal();
+  startYard(name, Number(width.toFixed(3)), Number(height.toFixed(3)), unit);
+  els.yardForm.reset();
+}
+
+function updateDetailPanel() {
+  const yard = getActiveYard();
+  if (!yard) {
+    els.containerForm.hidden = true;
+    setDetailFormDisabled(true);
+    els.containerForm.reset();
+    delete els.containerForm.dataset.containerId;
+    els.detailPlaceholder.hidden = false;
+    els.detailPlaceholder.innerHTML = '<p>Create a yard to edit container details.</p>';
+    return;
+  }
+  const container = selectedContainerId ? getContainerById(yard, selectedContainerId) : null;
+  if (!container) {
+    els.containerForm.hidden = true;
+    setDetailFormDisabled(true);
+    els.containerForm.reset();
+    delete els.containerForm.dataset.containerId;
+    els.detailPlaceholder.hidden = false;
+    els.detailPlaceholder.innerHTML = '<p>Select a container to edit its info.</p>';
+    return;
+  }
+  els.detailPlaceholder.hidden = true;
+  els.containerForm.hidden = false;
+  setDetailFormDisabled(false);
+  els.containerForm.dataset.containerId = container.id;
+  els.detailTitle.value = container.label ?? '';
+  els.detailTitle.placeholder = `${container.widthFt}`;
+  els.detailRenter.value = container.renter || '';
+  els.detailRate.value = container.monthlyRate || '';
+  els.detailPhone.value = container.phone || '';
+}
+
+function setDetailFormDisabled(disabled) {
+  Array.from(els.containerForm.elements).forEach((element) => {
+    element.disabled = disabled;
+  });
+}
+
+function handleDetailInput(event) {
+  if (!selectedContainerId) return;
+  const yard = getActiveYard();
+  if (!yard) return;
+  const container = getContainerById(yard, selectedContainerId);
+  if (!container) return;
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const { name, value } = target;
+  switch (name) {
+    case 'label':
+      container.label = value;
+      updateContainerLabelDisplay(container);
+      break;
+    case 'renter':
+      container.renter = value;
+      break;
+    case 'monthlyRate':
+      container.monthlyRate = value;
+      break;
+    case 'phone':
+      container.phone = value;
+      break;
+    default:
+      break;
+  }
+  saveState();
+}
+
+function updateContainerLabelDisplay(container) {
+  const group = els.yardSvg.querySelector(`.container-group[data-id="${container.id}"]`);
+  if (!group) return;
+  const text = group.querySelector('.container-label');
+  const labelText = container.label && container.label.trim() ? container.label.trim() : `${container.widthFt}`;
+  if (text) {
+    text.textContent = labelText;
+  }
+  group.setAttribute('aria-label', `${labelText} container`);
+}
+
+function handleGlobalKeyDown(event) {
+  if (isModalOpen()) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeYardModal();
+    }
+    return;
+  }
+  if (event.key === 'Escape' && selectedContainerId) {
+    event.preventDefault();
+    selectContainer(null);
+    return;
+  }
+  handleKeyDown(event);
+}
+
+
+
 function selectContainer(containerId) {
   selectedContainerId = containerId;
   Array.from(els.yardSvg.querySelectorAll('.container-group')).forEach((group) => {
     group.classList.toggle('selected', group.dataset.id === containerId);
   });
+  updateDetailPanel();
 }
 
 function getActiveYard() {
@@ -676,6 +898,10 @@ function createContainerFromType(yard, type) {
     x: 0,
     y: 0,
     rotation: 0,
+    label: `${type.widthFt}`,
+    renter: '',
+    monthlyRate: '',
+    phone: '',
   };
 }
 
