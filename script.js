@@ -282,7 +282,11 @@ function renderActiveYard() {
   const previouslySelected = selectedContainerId;
   els.yardSvg.innerHTML = '';
 
-  els.emptyState.hidden = Boolean(yard);
+  const hasYard = Boolean(yard);
+  if (els.emptyState) {
+    els.emptyState.hidden = hasYard;
+    els.emptyState.style.display = hasYard ? 'none' : '';
+  }
   if (!yard) {
     els.yardSvg.setAttribute('width', '100%');
     els.yardSvg.setAttribute('height', '100%');
@@ -385,7 +389,7 @@ function renderContainers(yard) {
     text.setAttribute('dominant-baseline', 'middle');
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('fill', '#f8fafc');
-    text.setAttribute('font-size', Math.max(Math.min(dims.width, dims.height) * 0.4, 0.6));
+    text.setAttribute('font-size', Math.max(Math.min(dims.width, dims.height) * 0.32, 0.5));
     const labelText = container.label && String(container.label).trim() ? String(container.label).trim() : `${container.widthFt}`;
     text.textContent = labelText;
 
@@ -764,11 +768,26 @@ function attemptMove(container, dx, dy, yard) {
 
 function attemptRotate(container, yard) {
   const previousRotation = container.rotation;
+  const previousPosition = { x: container.x, y: container.y };
+  const beforeDims = getContainerDimensions(yard, container);
+  const centerX = previousPosition.x + beforeDims.width / 2;
+  const centerY = previousPosition.y + beforeDims.height / 2;
+
   const nextRotation = previousRotation === 90 ? 0 : 90;
   container.rotation = nextRotation;
-  const dims = getContainerDimensions(yard, container);
-  const clamped = clampToBounds({ x: container.x, y: container.y }, dims.width, dims.height, yard);
-  const candidate = { ...container, ...clamped };
+
+  const afterDims = getContainerDimensions(yard, container);
+  let nextX = centerX - afterDims.width / 2;
+  let nextY = centerY - afterDims.height / 2;
+
+  if (state.snapEnabled) {
+    nextX = snapValue(nextX, yard.unit);
+    nextY = snapValue(nextY, yard.unit);
+  }
+
+  const clamped = clampToBounds({ x: nextX, y: nextY }, afterDims.width, afterDims.height, yard);
+  const candidate = { ...container, x: clamped.x, y: clamped.y };
+
   if (!isCollision(yard, candidate, container.id)) {
     container.x = clamped.x;
     container.y = clamped.y;
@@ -776,7 +795,8 @@ function attemptRotate(container, yard) {
     renderActiveYard();
   } else {
     container.rotation = previousRotation;
-    showHint('Rotation blocked by bounds or collision.');
+    container.x = previousPosition.x;
+    container.y = previousPosition.y;
     renderActiveYard();
   }
 }
