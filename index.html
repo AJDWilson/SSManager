@@ -9,9 +9,9 @@
 <body>
   <div class="app">
     <aside class="sidebar" aria-label="Project sidebar">
-      <section class="yards-panel">
+      <section class="yards-panel" aria-labelledby="yardsHeading">
         <div class="panel-header">
-          <h1>Yards</h1>
+          <h1 id="yardsHeading">Yards</h1>
           <div class="yard-actions">
             <button id="newYardBtn" type="button">New Yard</button>
             <button id="renameYardBtn" type="button">Rename</button>
@@ -24,7 +24,7 @@
 
       <section class="palette" aria-label="Container palette">
         <h2>Container Palette</h2>
-        <p class="palette-hint">Drag a container into the yard.</p>
+        <p class="palette-hint">Drag a container into the yard below. Containers snap to the grid when snapping is enabled.</p>
         <div id="paletteItems" class="palette-items"></div>
       </section>
 
@@ -45,6 +45,11 @@
           <span id="scaleInfo" class="scale-info" aria-live="polite"></span>
         </div>
       </header>
+
+      <section class="workspace-help" aria-live="polite">
+        <h2 class="sr-only">Keyboard and interaction help</h2>
+        <p>Use the Delete key to remove the selected container. Arrow keys nudge by one grid unit. Press “R” to rotate 90 degrees.</p>
+      </section>
 
       <div class="yard-wrapper" id="yardWrapper">
         <div id="hint" class="hint" role="status" aria-live="polite"></div>
