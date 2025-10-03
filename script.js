@@ -282,16 +282,15 @@ function renderActiveYard() {
   const previouslySelected = selectedContainerId;
   els.yardSvg.innerHTML = '';
 
+  els.emptyState.hidden = Boolean(yard);
   if (!yard) {
     els.yardSvg.setAttribute('width', '100%');
     els.yardSvg.setAttribute('height', '100%');
-    els.emptyState.hidden = false;
     els.yardSummary.textContent = '';
     selectContainer(null);
     return;
   }
 
-  els.emptyState.hidden = true;
   const available = els.yardWrapper.getBoundingClientRect();
   const padding = 32;
   const availableWidth = Math.max(available.width - padding, 200);
@@ -1049,8 +1048,27 @@ function selectContainer(containerId) {
 }
 
 function getActiveYard() {
-  if (!state.activeYardId) return null;
-  return state.yards.find((yard) => yard.id === state.activeYardId) || null;
+  if (!state.yards.length) {
+    if (state.activeYardId) {
+      state.activeYardId = null;
+      saveState();
+    }
+    return null;
+  }
+
+  if (state.activeYardId) {
+    const match = state.yards.find((yard) => yard.id === state.activeYardId);
+    if (match) {
+      return match;
+    }
+  }
+
+  const fallbackId = state.yards[0].id;
+  if (state.activeYardId !== fallbackId) {
+    state.activeYardId = fallbackId;
+    saveState();
+  }
+  return state.yards[0] || null;
 }
 
 function createContainerFromType(yard, type) {

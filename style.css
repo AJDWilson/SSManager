@@ -1,6 +1,7 @@
 :root {
   color-scheme: light;
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 68%;
 }
 
 .app-shell {
@@ -25,6 +26,8 @@
 body {
   margin: 0;
   background: transparent;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 button,
@@ -82,13 +85,13 @@ textarea {
 
 .brand-copy h1 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.05rem;
   font-weight: 600;
 }
 
 .brand-copy p {
   margin: 0.15rem 0 0;
-  font-size: 0.8rem;
+  font-size: 0.68rem;
   opacity: 0.7;
 }
 
@@ -148,7 +151,7 @@ textarea {
 
 .section-header h2 {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   font-weight: 600;
@@ -160,7 +163,7 @@ textarea {
 }
 
 .section-hint {
-  font-size: 0.7rem;
+  font-size: 0.58rem;
   opacity: 0.6;
 }
 
@@ -170,7 +173,7 @@ textarea {
 .btn-danger {
   border-radius: 0.75rem;
   padding: 0.45rem 0.7rem;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   border: 1px solid transparent;
   background: rgba(148, 163, 184, 0.15);
   color: inherit;
@@ -237,7 +240,7 @@ textarea {
   width: 100%;
   border-radius: 0.65rem;
   padding: 0.55rem 0.7rem;
-  font-size: 0.75rem;
+  font-size: 0.66rem;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -251,7 +254,7 @@ textarea {
 }
 
 .yard-meta {
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   opacity: 0.65;
 }
 
@@ -284,7 +287,7 @@ textarea {
   border-radius: 0.65rem;
   background: rgba(148, 163, 184, 0.1);
   cursor: grab;
-  font-size: 0.75rem;
+  font-size: 0.64rem;
   border: 1px solid transparent;
   transition: transform 0.2s ease, border 0.2s ease, background 0.2s ease;
 }
@@ -342,7 +345,7 @@ textarea {
 }
 
 .yard-summary {
-  font-size: 0.78rem;
+  font-size: 0.64rem;
   display: flex;
   gap: 0.8rem;
   flex-wrap: wrap;
@@ -356,7 +359,7 @@ textarea {
 }
 
 .scale-info {
-  font-size: 0.72rem;
+  font-size: 0.6rem;
   opacity: 0.65;
 }
 
@@ -375,7 +378,7 @@ textarea {
 }
 
 .help-chips li {
-  font-size: 0.7rem;
+  font-size: 0.58rem;
   padding: 0.35rem 0.5rem;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.16);
@@ -383,6 +386,7 @@ textarea {
 
 .key {
   font-weight: 600;
+  font-size: 0.6rem;
   padding: 0.25rem 0.4rem;
   border-radius: 0.35rem;
   background: rgba(59, 130, 246, 0.18);
@@ -470,6 +474,10 @@ textarea {
   backdrop-filter: blur(6px);
 }
 
+.empty-state[hidden] {
+  display: none;
+}
+
 .empty-card {
   background: rgba(255, 255, 255, 0.92);
   padding: 2rem;
@@ -480,12 +488,12 @@ textarea {
 
 .empty-card h3 {
   margin: 0 0 0.5rem;
-  font-size: 1rem;
+  font-size: 0.82rem;
 }
 
 .empty-card p {
   margin: 0 0 1.2rem;
-  font-size: 0.78rem;
+  font-size: 0.64rem;
   opacity: 0.8;
 }
 
@@ -513,12 +521,12 @@ textarea {
 
 .inventory-header h2 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.82rem;
 }
 
 .inventory-header p {
   margin: 0.25rem 0 0;
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   opacity: 0.65;
 }
 
@@ -536,12 +544,12 @@ textarea {
 .inventory-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.74rem;
+  font-size: 0.62rem;
 }
 
 .inventory-table th,
 .inventory-table td {
-  padding: 0.55rem 0.75rem;
+  padding: 0.4rem 0.6rem;
   text-align: left;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
 }
@@ -590,7 +598,7 @@ textarea {
   padding: 0.9rem 1rem;
   border-radius: 12px;
   background: rgba(148, 163, 184, 0.12);
-  font-size: 0.75rem;
+  font-size: 0.64rem;
 }
 
 .app-shell[data-theme="dark"] .inventory-overview {
@@ -613,7 +621,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  font-size: 0.75rem;
+  font-size: 0.66rem;
 }
 
 .form-row input,
@@ -642,7 +650,7 @@ textarea {
 }
 
 .detail-placeholder {
-  font-size: 0.75rem;
+  font-size: 0.66rem;
   opacity: 0.7;
 }
 
@@ -651,7 +659,7 @@ textarea {
   align-items: center;
   gap: 0.45rem;
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: 0.6rem;
 }
 
 .switch input {
@@ -692,7 +700,7 @@ textarea {
 }
 
 .switch-label {
-  font-size: 0.72rem;
+  font-size: 0.6rem;
   opacity: 0.75;
 }
 
@@ -746,14 +754,14 @@ textarea {
 
 .modal-header h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.92rem;
 }
 
 .modal-body .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem 1rem;
-  font-size: 0.78rem;
+  font-size: 0.64rem;
 }
 
 .modal-body input,
