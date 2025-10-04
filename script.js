@@ -143,15 +143,22 @@ function upgradeYard(yard) {
   }
   const safeUnit = ['ft', 'm', 'cm'].includes(yard.unit) ? yard.unit : 'ft';
   const name = typeof yard.name === 'string' && yard.name.trim() ? yard.name.trim() : 'Untitled Yard';
+  const containers = Array.isArray(yard.containers)
+    ? yard.containers.map(upgradeContainer).filter(Boolean)
+    : [];
+  const highestLabel = highestNumericLabel(containers);
+  let nextNumber = Number.isFinite(yard.nextContainerNumber) && yard.nextContainerNumber > 0
+    ? Math.floor(yard.nextContainerNumber)
+    : 1;
+  nextNumber = Math.max(nextNumber, highestLabel + 1, 1);
   return {
     ...yard,
     name,
     width: Number(width.toFixed(3)),
     height: Number(height.toFixed(3)),
     unit: safeUnit,
-    containers: Array.isArray(yard.containers)
-      ? yard.containers.map(upgradeContainer).filter(Boolean)
-      : [],
+    containers,
+    nextContainerNumber: nextNumber,
   };
 }
 
@@ -181,6 +188,53 @@ function upgradeContainer(container) {
         : Boolean(container.renter && String(container.renter).trim()),
     doors: sanitizeDoors(container.doors),
   };
+}
+
+function parseNumericLabel(label) {
+  if (typeof label !== 'string') {
+    return null;
+  }
+  const trimmed = label.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) {
+    return null;
+  }
+  const value = Number.parseInt(trimmed, 10);
+  return Number.isFinite(value) ? value : null;
+}
+
+function highestNumericLabel(containers) {
+  if (!Array.isArray(containers)) {
+    return 0;
+  }
+  return containers.reduce((max, container) => {
+    const value = parseNumericLabel(container?.label);
+    return value !== null && value > max ? value : max;
+  }, 0);
+}
+
+function ensureNextContainerNumber(yard) {
+  const highest = highestNumericLabel(yard?.containers);
+  const stored = yard && Number.isFinite(yard.nextContainerNumber) && yard.nextContainerNumber > 0
+    ? Math.floor(yard.nextContainerNumber)
+    : 1;
+  const next = Math.max(highest + 1, stored, 1);
+  if (yard) {
+    yard.nextContainerNumber = next;
+  }
+  return next;
+}
+
+function previewNextContainerLabel(yard) {
+  const next = ensureNextContainerNumber(yard);
+  return String(next);
+}
+
+function commitNextContainerLabel(yard) {
+  if (!yard) {
+    return;
+  }
+  const next = ensureNextContainerNumber(yard);
+  yard.nextContainerNumber = next + 1;
 }
 
 function sanitizeDoors(list) {
@@ -611,7 +665,7 @@ function renderInventory() {
   if (!yard) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 4;
+    cell.colSpan = 5;
     cell.textContent = 'Create or select a yard to begin.';
     row.appendChild(cell);
     els.inventoryBody.appendChild(row);
@@ -620,7 +674,7 @@ function renderInventory() {
   if (yard.containers.length === 0) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 4;
+    cell.colSpan = 5;
     cell.textContent = 'No containers placed yet.';
     row.appendChild(cell);
     els.inventoryBody.appendChild(row);
@@ -628,6 +682,11 @@ function renderInventory() {
   }
 
   const sorted = [...yard.containers].sort((a, b) => {
+    const numA = parseNumericLabel(a.label);
+    const numB = parseNumericLabel(b.label);
+    if (numA !== null && numB !== null && numA !== numB) {
+      return numA - numB;
+    }
     const labelA = (a.label || `${a.widthFt}`).toLowerCase();
     const labelB = (b.label || `${b.widthFt}`).toLowerCase();
     return labelA.localeCompare(labelB);
@@ -639,6 +698,9 @@ function renderInventory() {
     const nameCell = document.createElement('td');
     nameCell.setAttribute('scope', 'row');
     nameCell.textContent = container.label && container.label.trim() ? container.label.trim() : `${container.widthFt} ft`;
+
+    const sizeCell = document.createElement('td');
+    sizeCell.textContent = `${container.widthFt} ft`;
 
     const renterCell = document.createElement('td');
     renterCell.textContent = container.occupied
@@ -656,6 +718,7 @@ function renderInventory() {
     rateCell.textContent = container.occupied && Number.isFinite(rateValue) ? formatCurrency(rateValue) : '—';
 
     row.appendChild(nameCell);
+    row.appendChild(sizeCell);
     row.appendChild(renterCell);
     row.appendChild(phoneCell);
     row.appendChild(rateCell);
@@ -710,6 +773,7 @@ function startPaletteDragFromKeyboard(type) {
   container.y = 0;
   if (!isCollision(yard, container, container.id)) {
     yard.containers.push(container);
+    commitNextContainerLabel(yard);
     saveState();
     selectedContainerId = container.id;
     renderAll();
@@ -794,6 +858,7 @@ function finishPaletteDrag(event) {
   }
 
   yard.containers.push(container);
+  commitNextContainerLabel(yard);
   saveState();
   selectedContainerId = container.id;
   renderAll();
@@ -1007,7 +1072,9 @@ function startYard(name, width, height, unit) {
     height,
     unit,
     containers: [],
+    nextContainerNumber: 1,
   };
+  ensureNextContainerNumber(yard);
   state.yards.push(yard);
   state.activeYardId = yard.id;
   saveState();
@@ -1038,6 +1105,7 @@ function handleDuplicateYard() {
     ...container,
     id: generateId(),
   }));
+  clone.nextContainerNumber = ensureNextContainerNumber(clone);
   state.yards.push(clone);
   state.activeYardId = clone.id;
   saveState();
@@ -1461,7 +1529,7 @@ function createContainerFromType(yard, type) {
     x: 0,
     y: 0,
     rotation: 0,
-    label: `${type.widthFt}`,
+    label: previewNextContainerLabel(yard),
     renter: '',
     monthlyRate: '',
     phone: '',
