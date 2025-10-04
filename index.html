@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSManager</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell" data-theme="light">
+    <header class="app-header">
+      <div class="brand-block">
+        <img src="https://i.ibb.co/5X7bBnt1/SSManager-logo-transparent.png" alt="SSManager – Precision yard orchestration" class="brand-logo">
+        <div class="sr-only">
+          <h1>SSManager</h1>
+          <p>Precision yard orchestration</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <label class="switch switch-theme" for="themeToggle">
+          <input type="checkbox" id="themeToggle" aria-label="Toggle dark mode">
+          <span class="switch-slider"></span>
+          <span class="switch-label">Dark mode</span>
+        </label>
+        <button id="newYardBtn" type="button" class="btn btn-primary">Create Yard</button>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <aside class="panel panel-left" aria-label="Projects and palette">
+        <section class="panel-section">
+          <div class="section-header">
+            <h2>Yards</h2>
+            <div class="section-actions">
+              <button id="renameYardBtn" type="button" class="btn btn-ghost">Rename</button>
+              <button id="duplicateYardBtn" type="button" class="btn btn-ghost">Duplicate</button>
+              <button id="deleteYardBtn" type="button" class="btn btn-danger">Delete</button>
+            </div>
+          </div>
+          <ul id="yardList" class="yard-list" aria-label="Saved yards"></ul>
+        </section>
+
+        <section class="panel-section palette" aria-label="Container palette">
+          <div class="section-header">
+            <h2>Containers</h2>
+            <span class="section-hint">Drag to add</span>
+          </div>
+          <div id="paletteItems" class="palette-items"></div>
+        </section>
+
+        <section class="panel-section pricing" aria-label="Default container rates">
+          <div class="section-header">
+            <h2>Default rates</h2>
+            <span class="section-hint">Applied on new containers</span>
+          </div>
+          <form id="defaultRatesForm" class="default-rate-form">
+            <div class="default-rate-row">
+              <label for="rate-5ft">5 ft</label>
+              <div class="default-rate-field">
+                <span class="currency">$</span>
+                <input type="number" id="rate-5ft" name="5ft" min="0" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+            <div class="default-rate-row">
+              <label for="rate-10ft">10 ft</label>
+              <div class="default-rate-field">
+                <span class="currency">$</span>
+                <input type="number" id="rate-10ft" name="10ft" min="0" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+            <div class="default-rate-row">
+              <label for="rate-20ft">20 ft</label>
+              <div class="default-rate-field">
+                <span class="currency">$</span>
+                <input type="number" id="rate-20ft" name="20ft" min="0" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+            <div class="default-rate-row">
+              <label for="rate-40ft">40 ft</label>
+              <div class="default-rate-field">
+                <span class="currency">$</span>
+                <input type="number" id="rate-40ft" name="40ft" min="0" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+            <div class="default-rate-row">
+              <label for="rate-50ft">50 ft</label>
+              <div class="default-rate-field">
+                <span class="currency">$</span>
+                <input type="number" id="rate-50ft" name="50ft" min="0" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+          </form>
+        </section>
+      </aside>
+
+      <main class="workspace" aria-label="Yard workspace">
+        <div class="workspace-stack">
+          <div class="workspace-bar">
+            <div class="yard-summary" id="yardSummary" aria-live="polite"></div>
+            <div class="workspace-controls">
+              <label class="switch">
+                <input type="checkbox" id="snapToggle" checked>
+                <span class="switch-slider"></span>
+                <span class="switch-label">Snap to grid</span>
+              </label>
+              <span id="scaleInfo" class="scale-info" aria-live="polite"></span>
+            </div>
+          </div>
+
+          <section class="layer-panel" aria-label="Layer controls">
+            <div class="layer-head">
+              <h2>Layers</h2>
+              <span class="section-hint">Organize stacked containers</span>
+            </div>
+            <div id="layerTabs" class="layer-tabs" role="tablist" aria-live="polite"></div>
+            <div class="layer-actions">
+              <button type="button" class="btn btn-ghost" id="addLayerBtn">Add layer</button>
+              <button type="button" class="btn btn-ghost" id="renameLayerBtn">Rename</button>
+              <button type="button" class="btn btn-danger" id="deleteLayerBtn">Delete</button>
+            </div>
+          </section>
+
+          <section class="entrance-panel" aria-label="Yard entrances">
+            <div class="section-header">
+              <h2>Entrances</h2>
+              <span class="section-hint">Gates and driveways</span>
+            </div>
+            <div id="entranceList" class="entrance-list" aria-live="polite"></div>
+            <div class="entrance-actions">
+              <button type="button" class="btn btn-ghost" id="addEntranceBtn">Add entrance</button>
+            </div>
+          </section>
+
+          <section class="workspace-help" aria-live="polite">
+            <h2 class="sr-only">Keyboard and interaction help</h2>
+            <ul class="help-chips">
+              <li><span class="key">Delete</span> remove</li>
+              <li><span class="key">← → ↑ ↓</span> nudge</li>
+              <li><span class="key">R</span> rotate 90°</li>
+              <li><span class="key">Scroll</span> zoom</li>
+              <li><span class="key">Middle drag</span> pan</li>
+            </ul>
+          </section>
+
+          <div class="yard-wrapper" id="yardWrapper">
+            <div id="hint" class="hint" role="status" aria-live="polite"></div>
+            <svg id="yardSvg" class="yard-svg" tabindex="0" aria-label="Yard layout" preserveAspectRatio="xMidYMid meet"></svg>
+            <div id="emptyState" class="empty-state">
+              <div class="empty-card">
+                <h3>No yard selected</h3>
+                <p>Create a yard to begin arranging containers.</p>
+                <button type="button" class="btn btn-primary" data-trigger="create-yard">Create Yard</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section class="inventory-panel" aria-label="Container roster">
+          <header class="inventory-header">
+            <h2>Container Roster</h2>
+            <p>Scroll to review occupants and contact information.</p>
+          </header>
+          <div class="inventory-table-wrapper">
+            <table class="inventory-table">
+              <thead>
+                <tr>
+                  <th scope="col">Container</th>
+                  <th scope="col">Size</th>
+                  <th scope="col">Renter</th>
+                  <th scope="col">Phone</th>
+                  <th scope="col" class="numeric">Monthly rate</th>
+                </tr>
+              </thead>
+              <tbody id="inventoryBody"></tbody>
+            </table>
+          </div>
+          <section class="inventory-overview" aria-live="polite">
+            <h3>Monthly overview</h3>
+            <div class="overview-row">
+              <span>Total containers</span>
+              <strong id="overviewCount">0</strong>
+            </div>
+            <div class="overview-row">
+              <span>Occupied</span>
+              <strong id="overviewOccupied">0</strong>
+            </div>
+            <div class="overview-row">
+              <span>Monthly revenue</span>
+              <strong id="overviewRevenue">$0.00</strong>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <aside class="panel panel-right" aria-label="Container details">
+        <section class="panel-section details-panel">
+          <div class="section-header">
+            <h2>Container Details</h2>
+          </div>
+          <div id="detailPlaceholder" class="detail-placeholder">
+            <p>Select a container to edit its info.</p>
+          </div>
+          <form id="containerForm" class="detail-form" hidden>
+            <div class="form-row">
+              <label class="switch">
+                <input id="detailOccupied" name="occupied" type="checkbox">
+                <span class="switch-slider"></span>
+                <span class="switch-label">Container occupied</span>
+              </label>
+            </div>
+            <div class="form-row">
+              <label for="detailTitle">Container title</label>
+              <input id="detailTitle" name="label" type="text" autocomplete="off" required placeholder="Container number">
+            </div>
+            <div class="form-row">
+              <label for="detailRenter">Rented by</label>
+              <input id="detailRenter" name="renter" type="text" autocomplete="off" placeholder="Client name">
+            </div>
+            <div class="form-row">
+              <label for="detailRate">Monthly rate</label>
+              <input id="detailRate" name="monthlyRate" type="number" min="0" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-row">
+              <label for="detailPhone">Client phone</label>
+              <input id="detailPhone" name="phone" type="tel" autocomplete="off" placeholder="(555) 123-4567">
+            </div>
+            <fieldset class="form-row door-fieldset">
+              <legend>Doors</legend>
+              <p class="door-hint">Add entry points and adjust their placement along the container edges.</p>
+              <div id="doorList" class="door-list" role="list"></div>
+              <button type="button" class="btn btn-ghost" id="addDoorBtn">Add door</button>
+            </fieldset>
+          </form>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <div id="yardModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="yardModalTitle" hidden>
+    <div class="modal">
+      <form id="yardForm" class="modal-content">
+        <header class="modal-header">
+          <h2 id="yardModalTitle">Create a Yard</h2>
+          <button type="button" class="btn-icon" id="yardModalClose" aria-label="Close create yard dialog">×</button>
+        </header>
+        <div class="modal-body">
+          <div class="form-grid">
+            <label for="yardNameInput">Yard name</label>
+            <input id="yardNameInput" name="name" type="text" required>
+            <label for="yardWidthInput">Width</label>
+            <input id="yardWidthInput" name="width" type="number" min="1" step="0.01" required>
+            <label for="yardHeightInput">Height</label>
+            <input id="yardHeightInput" name="height" type="number" min="1" step="0.01" required>
+            <label for="yardUnitSelect">Units</label>
+            <select id="yardUnitSelect" name="unit" required>
+              <option value="ft">Feet (ft)</option>
+              <option value="m">Meters (m)</option>
+              <option value="cm">Centimeters (cm)</option>
+            </select>
+          </div>
+        </div>
+        <footer class="modal-footer">
+          <button type="button" class="btn" id="yardModalCancel">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create yard</button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
