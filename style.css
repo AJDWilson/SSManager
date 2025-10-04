@@ -237,10 +237,11 @@ textarea {
 
 .yard-list li button {
   all: unset;
+  box-sizing: border-box;
   width: 100%;
-  border-radius: 0.65rem;
-  padding: 0.45rem 0.75rem;
-  font-size: 0.9rem;
+  border-radius: 0.6rem;
+  padding: 0.32rem 0.6rem;
+  font-size: 0.82rem;
   cursor: pointer;
   display: flex;
   justify-content: space-between;

@@ -146,11 +146,7 @@ function upgradeYard(yard) {
   const containers = Array.isArray(yard.containers)
     ? yard.containers.map(upgradeContainer).filter(Boolean)
     : [];
-  const highestLabel = highestNumericLabel(containers);
-  let nextNumber = Number.isFinite(yard.nextContainerNumber) && yard.nextContainerNumber > 0
-    ? Math.floor(yard.nextContainerNumber)
-    : 1;
-  nextNumber = Math.max(nextNumber, highestLabel + 1, 1);
+  const nextNumber = smallestAvailableNumericLabel(containers);
   return {
     ...yard,
     name,
@@ -202,22 +198,26 @@ function parseNumericLabel(label) {
   return Number.isFinite(value) ? value : null;
 }
 
-function highestNumericLabel(containers) {
-  if (!Array.isArray(containers)) {
-    return 0;
+function smallestAvailableNumericLabel(containers) {
+  if (!Array.isArray(containers) || containers.length === 0) {
+    return 1;
   }
-  return containers.reduce((max, container) => {
+  const used = new Set();
+  containers.forEach((container) => {
     const value = parseNumericLabel(container?.label);
-    return value !== null && value > max ? value : max;
-  }, 0);
+    if (value !== null) {
+      used.add(value);
+    }
+  });
+  let candidate = 1;
+  while (used.has(candidate)) {
+    candidate += 1;
+  }
+  return candidate;
 }
 
 function ensureNextContainerNumber(yard) {
-  const highest = highestNumericLabel(yard?.containers);
-  const stored = yard && Number.isFinite(yard.nextContainerNumber) && yard.nextContainerNumber > 0
-    ? Math.floor(yard.nextContainerNumber)
-    : 1;
-  const next = Math.max(highest + 1, stored, 1);
+  const next = smallestAvailableNumericLabel(yard?.containers);
   if (yard) {
     yard.nextContainerNumber = next;
   }
@@ -1057,6 +1057,7 @@ function removeSelectedContainer() {
   const idx = yard.containers.findIndex((c) => c.id === selectedContainerId);
   if (idx >= 0) {
     yard.containers.splice(idx, 1);
+    ensureNextContainerNumber(yard);
     saveState();
     renderAll();
     showHint('Container removed.');
