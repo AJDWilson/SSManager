@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" role="img" aria-labelledby="title desc">
+  <title id="title">SSManager logo</title>
+  <desc id="desc">Stylised red S emblem with SSManager tagline</desc>
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff5146" />
+      <stop offset="100%" stop-color="#d21616" />
+    </linearGradient>
+  </defs>
+  <g transform="translate(20 20)">
+    <path fill="url(#grad)" d="M0 0h160l60 34-60 34H0z" />
+    <path fill="url(#grad)" d="M0 66h160l60 34-60 34H0z" />
+    <path fill="url(#grad)" d="M110 33h110l60 34-60 34H110z" opacity="0.9" />
+  </g>
+  <g fill="#ffffff" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+    <text x="220" y="82" font-size="64" font-weight="600">SSManager</text>
+    <text x="220" y="120" font-size="24" opacity="0.7">Precision yard orchestration</text>
+  </g>
+</svg>
