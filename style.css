@@ -68,31 +68,21 @@ textarea {
 
 .brand-block {
   display: flex;
-  gap: 0.75rem;
   align-items: center;
+  max-height: 3.5rem;
 }
 
-.brand-mark {
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 0.9rem;
-  display: grid;
-  place-items: center;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  background: rgba(148, 163, 184, 0.2);
+.brand-logo {
+  height: 3.1rem;
+  width: auto;
+  max-width: 260px;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 12px rgba(15, 23, 42, 0.35));
 }
 
-.brand-copy h1 {
-  margin: 0;
-  font-size: 1.35rem;
-  font-weight: 600;
-}
-
-.brand-copy p {
-  margin: 0.15rem 0 0;
-  font-size: 0.9rem;
-  opacity: 0.7;
+.app-shell[data-theme="dark"] .brand-logo {
+  filter: drop-shadow(0 6px 18px rgba(2, 6, 23, 0.85));
 }
 
 .header-actions {

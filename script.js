@@ -881,6 +881,10 @@ function handleContainerPointerDown(event, containerId) {
   const offsetY = pointer.y - container.y;
   const group = event.currentTarget;
   group.classList.add('dragging');
+  const parent = group.parentNode;
+  if (parent && parent.lastChild !== group) {
+    parent.appendChild(group);
+  }
 
   currentDrag = {
     mode: 'move',
@@ -1036,19 +1040,10 @@ function attemptRotate(container, yard) {
   }
 
   const clamped = clampToBounds({ x: nextX, y: nextY }, afterDims.width, afterDims.height, yard);
-  const candidate = { ...container, x: clamped.x, y: clamped.y };
-
-  if (!isCollision(yard, candidate, container.id)) {
-    container.x = clamped.x;
-    container.y = clamped.y;
-    saveState();
-    renderActiveYard();
-  } else {
-    container.rotation = previousRotation;
-    container.x = previousPosition.x;
-    container.y = previousPosition.y;
-    renderActiveYard();
-  }
+  container.x = clamped.x;
+  container.y = clamped.y;
+  saveState();
+  renderActiveYard();
 }
 
 function removeSelectedContainer() {
