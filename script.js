@@ -233,8 +233,7 @@ function commitNextContainerLabel(yard) {
   if (!yard) {
     return;
   }
-  const next = ensureNextContainerNumber(yard);
-  yard.nextContainerNumber = next + 1;
+  ensureNextContainerNumber(yard);
 }
 
 function sanitizeDoors(list) {

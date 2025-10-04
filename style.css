@@ -239,8 +239,8 @@ textarea {
   all: unset;
   width: 100%;
   border-radius: 0.65rem;
-  padding: 0.65rem 0.85rem;
-  font-size: 0.95rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.9rem;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
