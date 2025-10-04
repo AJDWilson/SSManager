@@ -2,6 +2,11 @@ const STORAGE_KEY = 'yards_v1';
 const ACTIVE_KEY = 'yards_active_id_v1';
 const THEME_KEY = 'ssmanager_theme_v1';
 const containerDepthFt = 8;
+const DOOR_LENGTH_FT = 3;
+const DOOR_THICKNESS_FT = 0.75;
+const ZOOM_MIN = 0.4;
+const ZOOM_MAX = 6;
+const DOOR_EDGES = ['north', 'south', 'east', 'west'];
 
 /** @type {const} */
 const containerTypes = [
@@ -22,13 +27,25 @@ const state = {
   yards: [],
   activeYardId: null,
   snapEnabled: true,
+  baseScale: 1,
   scale: 1,
+  view: { zoom: 1, panX: 0, panY: 0, userAdjusted: false },
   theme: 'light',
 };
 
 let selectedContainerId = null;
 let currentDrag = null;
 let hintTimeout = null;
+let lastRenderedYardId = null;
+
+const panState = {
+  active: false,
+  pointerId: null,
+  startX: 0,
+  startY: 0,
+  originPanX: 0,
+  originPanY: 0,
+};
 
 const els = {
   appShell: document.querySelector('.app-shell'),
@@ -60,6 +77,8 @@ const els = {
   detailRate: document.getElementById('detailRate'),
   detailPhone: document.getElementById('detailPhone'),
   detailOccupied: document.getElementById('detailOccupied'),
+  doorList: document.getElementById('doorList'),
+  addDoorBtn: document.getElementById('addDoorBtn'),
   inventoryBody: document.getElementById('inventoryBody'),
   overviewCount: document.getElementById('overviewCount'),
   overviewOccupied: document.getElementById('overviewOccupied'),
@@ -160,7 +179,30 @@ function upgradeContainer(container) {
       typeof container.occupied === 'boolean'
         ? container.occupied
         : Boolean(container.renter && String(container.renter).trim()),
+    doors: sanitizeDoors(container.doors),
   };
+}
+
+function sanitizeDoors(list) {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  return list
+    .map((door) => {
+      if (!door || typeof door !== 'object') return null;
+      const edge = DOOR_EDGES.includes(door.edge) ? door.edge : 'north';
+      let offset = Number(door.offset);
+      if (!Number.isFinite(offset)) {
+        offset = 0.5;
+      }
+      offset = Math.min(Math.max(offset, 0), 1);
+      return {
+        id: door.id || generateId(),
+        edge,
+        offset,
+      };
+    })
+    .filter(Boolean);
 }
 
 function attachEventListeners() {
@@ -209,6 +251,23 @@ function attachEventListeners() {
 
   els.containerForm.addEventListener('input', handleDetailInput);
   els.containerForm.addEventListener('submit', (event) => event.preventDefault());
+
+  if (els.addDoorBtn) {
+    els.addDoorBtn.addEventListener('click', handleAddDoor);
+  }
+  if (els.doorList) {
+    els.doorList.addEventListener('input', handleDoorListChange);
+    els.doorList.addEventListener('change', handleDoorListChange);
+    els.doorList.addEventListener('click', handleDoorListClick);
+  }
+
+  if (els.yardWrapper) {
+    els.yardWrapper.addEventListener('wheel', handleWheel, { passive: false });
+    els.yardWrapper.addEventListener('pointerdown', handleViewPointerDown);
+  }
+  document.addEventListener('pointermove', handleViewPointerMove);
+  document.addEventListener('pointerup', handleViewPointerUp);
+  document.addEventListener('pointercancel', handleViewPointerUp);
 }
 
 function renderAll() {
@@ -288,11 +347,20 @@ function renderActiveYard() {
     els.emptyState.style.display = hasYard ? 'none' : '';
   }
   if (!yard) {
+    resetViewTransform();
+    lastRenderedYardId = null;
+    state.baseScale = 1;
+    state.scale = 1;
+    els.yardSvg.style.transform = 'translate(0px, 0px) scale(1)';
     els.yardSvg.setAttribute('width', '100%');
     els.yardSvg.setAttribute('height', '100%');
     els.yardSummary.textContent = '';
     selectContainer(null);
     return;
+  }
+
+  if (yard.id !== lastRenderedYardId) {
+    resetViewTransform();
   }
 
   const available = els.yardWrapper.getBoundingClientRect();
@@ -304,12 +372,28 @@ function renderActiveYard() {
     availableHeight / yard.height
   );
   const minScale = 8 / convertFtToUnit(1, yard.unit);
-  const scale = Math.max(scaleCandidate, minScale);
-  state.scale = scale;
+  const previousBase = state.baseScale || 1;
+  state.baseScale = Math.max(scaleCandidate, minScale);
+
+  if (state.view.userAdjusted) {
+    const ratio = state.baseScale / previousBase;
+    state.view.panX *= ratio;
+    state.view.panY *= ratio;
+  }
+
+  const wrapperRect = els.yardWrapper.getBoundingClientRect();
+  if (!state.view.userAdjusted) {
+    const baseWidthPx = yard.width * state.baseScale;
+    const baseHeightPx = yard.height * state.baseScale;
+    state.view.panX = (wrapperRect.width - baseWidthPx) / 2;
+    state.view.panY = (wrapperRect.height - baseHeightPx) / 2;
+  }
 
   els.yardSvg.setAttribute('viewBox', `0 0 ${yard.width} ${yard.height}`);
-  els.yardSvg.setAttribute('width', yard.width * scale);
-  els.yardSvg.setAttribute('height', yard.height * scale);
+  els.yardSvg.setAttribute('width', yard.width * state.baseScale);
+  els.yardSvg.setAttribute('height', yard.height * state.baseScale);
+  els.yardSvg.style.width = `${yard.width * state.baseScale}px`;
+  els.yardSvg.style.height = `${yard.height * state.baseScale}px`;
 
   renderGrid(yard);
   renderContainers(yard);
@@ -321,8 +405,24 @@ function renderActiveYard() {
   } else {
     selectContainer(null);
   }
+  applyViewTransform();
+  renderScaleInfo();
   const dims = `${formatNumber(yard.width)} × ${formatNumber(yard.height)} ${yard.unit}`;
   els.yardSummary.textContent = `${yard.name} • ${dims} • ${yard.containers.length} container${yard.containers.length === 1 ? '' : 's'}`;
+  lastRenderedYardId = yard.id;
+}
+
+function applyViewTransform() {
+  if (!els.yardSvg) return;
+  state.view.zoom = Math.min(Math.max(state.view.zoom, ZOOM_MIN), ZOOM_MAX);
+  const transform = `translate(${state.view.panX}px, ${state.view.panY}px) scale(${state.view.zoom})`;
+  els.yardSvg.style.transformOrigin = '0 0';
+  els.yardSvg.style.transform = transform;
+  state.scale = state.baseScale * state.view.zoom;
+}
+
+function resetViewTransform() {
+  state.view = { zoom: 1, panX: 0, panY: 0, userAdjusted: false };
 }
 
 function renderGrid(yard) {
@@ -393,7 +493,20 @@ function renderContainers(yard) {
     const labelText = container.label && String(container.label).trim() ? String(container.label).trim() : `${container.widthFt}`;
     text.textContent = labelText;
 
+    const doorGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    doorGroup.classList.add('door-group');
+    const doors = Array.isArray(container.doors) ? container.doors : (container.doors = []);
+    doors.forEach((door) => {
+      const doorElement = createDoorElement(yard, dims, door);
+      if (doorElement) {
+        doorGroup.appendChild(doorElement);
+      }
+    });
+
     group.appendChild(rect);
+    if (doorGroup.childNodes.length > 0) {
+      group.appendChild(doorGroup);
+    }
     group.appendChild(text);
     setContainerTransform(group, container.x, container.y);
 
@@ -417,8 +530,78 @@ function renderScaleInfo() {
   }
   const unitStep = gridUnit(yard.unit);
   const gridLabel = formatNumber(unitStep);
-  els.scaleInfo.textContent = `Scale: 1 grid ≈ ${gridLabel} ${yard.unit} (${state.snapEnabled ? 'snap on' : 'snap off'})`;
+  const zoomPercent = Math.round(state.view.zoom * 100);
+  els.scaleInfo.textContent = `Scale: 1 grid ≈ ${gridLabel} ${yard.unit} • Zoom ${zoomPercent}% (${state.snapEnabled ? 'snap on' : 'snap off'})`;
   els.snapToggle.checked = state.snapEnabled;
+}
+
+function handleWheel(event) {
+  const yard = getActiveYard();
+  if (!yard || !els.yardWrapper) return;
+  event.preventDefault();
+  const wrapperRect = els.yardWrapper.getBoundingClientRect();
+  const pointerX = event.clientX - wrapperRect.left;
+  const pointerY = event.clientY - wrapperRect.top;
+  const scaleBefore = state.baseScale * state.view.zoom;
+  if (scaleBefore <= 0) {
+    return;
+  }
+  const yardX = (pointerX - state.view.panX) / scaleBefore;
+  const yardY = (pointerY - state.view.panY) / scaleBefore;
+  const zoomStep = Math.exp(-event.deltaY * 0.002);
+  state.view.zoom = Math.min(Math.max(state.view.zoom * zoomStep, ZOOM_MIN), ZOOM_MAX);
+  const scaleAfter = state.baseScale * state.view.zoom;
+  state.view.panX = pointerX - yardX * scaleAfter;
+  state.view.panY = pointerY - yardY * scaleAfter;
+  state.view.userAdjusted = true;
+  applyViewTransform();
+  renderScaleInfo();
+}
+
+function handleViewPointerDown(event) {
+  if (event.button !== 1) return;
+  if (!getActiveYard() || !els.yardWrapper) return;
+  event.preventDefault();
+  panState.active = true;
+  panState.pointerId = event.pointerId;
+  panState.startX = event.clientX;
+  panState.startY = event.clientY;
+  panState.originPanX = state.view.panX;
+  panState.originPanY = state.view.panY;
+  state.view.userAdjusted = true;
+  els.yardWrapper.classList.add('is-panning');
+  if (typeof els.yardWrapper.setPointerCapture === 'function') {
+    try {
+      els.yardWrapper.setPointerCapture(event.pointerId);
+    } catch (err) {
+      // ignore capture errors
+    }
+  }
+}
+
+function handleViewPointerMove(event) {
+  if (!panState.active || event.pointerId !== panState.pointerId) return;
+  const dx = event.clientX - panState.startX;
+  const dy = event.clientY - panState.startY;
+  state.view.panX = panState.originPanX + dx;
+  state.view.panY = panState.originPanY + dy;
+  applyViewTransform();
+}
+
+function handleViewPointerUp(event) {
+  if (!panState.active || event.pointerId !== panState.pointerId) return;
+  panState.active = false;
+  panState.pointerId = null;
+  if (els.yardWrapper) {
+    els.yardWrapper.classList.remove('is-panning');
+    if (typeof els.yardWrapper.releasePointerCapture === 'function') {
+      try {
+        els.yardWrapper.releasePointerCapture(event.pointerId);
+      } catch (err) {
+        // ignore release errors
+      }
+    }
+  }
 }
 
 function renderInventory() {
@@ -618,6 +801,9 @@ function finishPaletteDrag(event) {
 }
 
 function handleContainerPointerDown(event, containerId) {
+  if (event.button !== 0) {
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   const yard = getActiveYard();
@@ -932,6 +1118,12 @@ function updateDetailPanel() {
     delete els.containerForm.dataset.containerId;
     els.detailPlaceholder.hidden = false;
     els.detailPlaceholder.innerHTML = '<p>Create a yard to edit container details.</p>';
+    if (els.doorList) {
+      els.doorList.innerHTML = '';
+    }
+    if (els.addDoorBtn) {
+      els.addDoorBtn.disabled = true;
+    }
     return;
   }
   const container = selectedContainerId ? getContainerById(yard, selectedContainerId) : null;
@@ -942,6 +1134,12 @@ function updateDetailPanel() {
     delete els.containerForm.dataset.containerId;
     els.detailPlaceholder.hidden = false;
     els.detailPlaceholder.innerHTML = '<p>Select a container to edit its info.</p>';
+    if (els.doorList) {
+      els.doorList.innerHTML = '';
+    }
+    if (els.addDoorBtn) {
+      els.addDoorBtn.disabled = true;
+    }
     return;
   }
   els.detailPlaceholder.hidden = true;
@@ -955,6 +1153,10 @@ function updateDetailPanel() {
   els.detailPhone.value = container.phone || '';
   els.detailOccupied.checked = Boolean(container.occupied);
   setOccupiedFieldState(Boolean(container.occupied));
+  if (els.addDoorBtn) {
+    els.addDoorBtn.disabled = false;
+  }
+  renderDoorList(container);
 }
 
 function setDetailFormDisabled(disabled) {
@@ -962,6 +1164,16 @@ function setDetailFormDisabled(disabled) {
   Array.from(els.containerForm.elements).forEach((element) => {
     element.disabled = disabled;
   });
+  if (els.addDoorBtn) {
+    els.addDoorBtn.disabled = disabled || !selectedContainerId;
+  }
+  if (els.doorList) {
+    Array.from(els.doorList.querySelectorAll('select, input, button'))
+      .filter((control) => control !== els.addDoorBtn)
+      .forEach((control) => {
+        control.disabled = disabled;
+      });
+  }
 }
 
 function setOccupiedFieldState(occupied) {
@@ -1030,9 +1242,159 @@ function handleDetailInput(event) {
   }
 }
 
+function renderDoorList(container) {
+  if (!els.doorList) return;
+  els.doorList.innerHTML = '';
+  if (!container || !Array.isArray(container.doors) || container.doors.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'door-empty';
+    empty.textContent = 'No doors added yet.';
+    els.doorList.appendChild(empty);
+    return;
+  }
+  const edgeLabels = {
+    north: 'Top edge',
+    south: 'Bottom edge',
+    west: 'Left edge',
+    east: 'Right edge',
+  };
+  container.doors.forEach((door) => {
+    const item = document.createElement('div');
+    item.className = 'door-item';
+    item.dataset.doorId = door.id;
+    item.setAttribute('role', 'listitem');
+
+    const edgeLabel = document.createElement('label');
+    edgeLabel.textContent = 'Edge';
+    const select = document.createElement('select');
+    select.name = 'edge';
+    DOOR_EDGES.forEach((value) => {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = edgeLabels[value];
+      select.appendChild(opt);
+    });
+    select.value = DOOR_EDGES.includes(door.edge) ? door.edge : 'north';
+    edgeLabel.appendChild(select);
+
+    const offsetLabel = document.createElement('label');
+    offsetLabel.className = 'door-offset';
+    offsetLabel.textContent = '';
+    const offsetTitle = document.createElement('span');
+    offsetTitle.textContent = 'Offset';
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.name = 'offset';
+    range.min = '0';
+    range.max = '100';
+    range.step = '1';
+    const percentRaw = Number(door.offset);
+    const clampedPercent = Number.isFinite(percentRaw)
+      ? Math.round(Math.min(Math.max(percentRaw, 0), 1) * 100)
+      : 50;
+    range.value = String(clampedPercent);
+    const valueDisplay = document.createElement('span');
+    valueDisplay.className = 'door-offset-value';
+    valueDisplay.textContent = `${clampedPercent}%`;
+    offsetLabel.appendChild(offsetTitle);
+    offsetLabel.appendChild(range);
+    offsetLabel.appendChild(valueDisplay);
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'door-remove';
+    remove.dataset.action = 'remove-door';
+    remove.textContent = 'Remove';
+
+    item.appendChild(edgeLabel);
+    item.appendChild(offsetLabel);
+    item.appendChild(remove);
+    els.doorList.appendChild(item);
+  });
+}
+
+function handleAddDoor() {
+  if (!selectedContainerId) return;
+  const yard = getActiveYard();
+  if (!yard) return;
+  const container = getContainerById(yard, selectedContainerId);
+  if (!container) return;
+  if (!Array.isArray(container.doors)) {
+    container.doors = [];
+  }
+  container.doors.push({ id: generateId(), edge: 'north', offset: 0.5 });
+  saveState();
+  renderDoorList(container);
+  refreshContainerDoors(container);
+}
+
+function handleDoorListChange(event) {
+  if (!selectedContainerId) return;
+  const yard = getActiveYard();
+  if (!yard) return;
+  const container = getContainerById(yard, selectedContainerId);
+  if (!container || !Array.isArray(container.doors)) return;
+  const item = event.target.closest('[data-door-id]');
+  if (!item) return;
+  const doorId = item.dataset.doorId;
+  const door = container.doors.find((entry) => entry.id === doorId);
+  if (!door) return;
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return;
+  }
+  if ('disabled' in target && target.disabled) {
+    return;
+  }
+  let changed = false;
+  if (target instanceof HTMLSelectElement && target.name === 'edge') {
+    door.edge = DOOR_EDGES.includes(target.value) ? target.value : 'north';
+    changed = true;
+  } else if (target instanceof HTMLInputElement && target.name === 'offset') {
+    const value = Number(target.value);
+    if (Number.isFinite(value)) {
+      const clamped = Math.min(Math.max(value, 0), 100) / 100;
+      door.offset = clamped;
+      const display = item.querySelector('.door-offset-value');
+      if (display) {
+        display.textContent = `${Math.round(clamped * 100)}%`;
+      }
+      changed = true;
+    }
+  }
+  if (changed) {
+    saveState();
+    refreshContainerDoors(container);
+  }
+}
+
+function handleDoorListClick(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (!target.matches('.door-remove')) return;
+  if (target.disabled) return;
+  if (!selectedContainerId) return;
+  const yard = getActiveYard();
+  if (!yard) return;
+  const container = getContainerById(yard, selectedContainerId);
+  if (!container || !Array.isArray(container.doors)) return;
+  const item = target.closest('[data-door-id]');
+  if (!item) return;
+  const doorId = item.dataset.doorId;
+  const index = container.doors.findIndex((door) => door.id === doorId);
+  if (index === -1) return;
+  container.doors.splice(index, 1);
+  saveState();
+  renderDoorList(container);
+  refreshContainerDoors(container);
+}
+
 function updateContainerLabelDisplay(container) {
   const group = els.yardSvg.querySelector(`.container-group[data-id="${container.id}"]`);
-  if (!group) return;
+  if (!group) {
+    renderActiveYard();
+    return;
+  }
   const text = group.querySelector('.container-label');
   const labelText = container.label && container.label.trim() ? container.label.trim() : `${container.widthFt}`;
   if (text) {
@@ -1104,6 +1466,7 @@ function createContainerFromType(yard, type) {
     monthlyRate: '',
     phone: '',
     occupied: false,
+    doors: [],
   };
 }
 
@@ -1135,6 +1498,82 @@ function getContainerDimensions(yard, container) {
     return { width: depth, height: width };
   }
   return { width, height: depth };
+}
+
+function createDoorElement(yard, dims, door) {
+  if (!door) return null;
+  const edge = DOOR_EDGES.includes(door.edge) ? door.edge : 'north';
+  let offset = Number(door.offset);
+  if (!Number.isFinite(offset)) {
+    offset = 0.5;
+  }
+  offset = Math.min(Math.max(offset, 0), 1);
+
+  const doorLength = convertFtToUnit(DOOR_LENGTH_FT, yard.unit);
+  const doorThickness = convertFtToUnit(DOOR_THICKNESS_FT, yard.unit);
+
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.classList.add('container-door');
+
+  if (edge === 'north' || edge === 'south') {
+    const width = Math.min(doorLength, dims.width);
+    const height = Math.min(doorThickness, dims.height);
+    const maxX = Math.max(dims.width - width, 0);
+    const x = Math.min(Math.max(offset * maxX, 0), maxX);
+    const y = edge === 'north' ? 0 : Math.max(dims.height - height, 0);
+    rect.setAttribute('width', width);
+    rect.setAttribute('height', height);
+    rect.setAttribute('x', x);
+    rect.setAttribute('y', y);
+    rect.setAttribute('rx', Math.min(width, height) * 0.15);
+    rect.setAttribute('ry', Math.min(width, height) * 0.15);
+    return rect;
+  }
+
+  const width = Math.min(doorThickness, dims.width);
+  const height = Math.min(doorLength, dims.height);
+  const maxY = Math.max(dims.height - height, 0);
+  const y = Math.min(Math.max(offset * maxY, 0), maxY);
+  const x = edge === 'west' ? 0 : Math.max(dims.width - width, 0);
+  rect.setAttribute('width', width);
+  rect.setAttribute('height', height);
+  rect.setAttribute('x', x);
+  rect.setAttribute('y', y);
+  rect.setAttribute('rx', Math.min(width, height) * 0.15);
+  rect.setAttribute('ry', Math.min(width, height) * 0.15);
+  return rect;
+}
+
+function refreshContainerDoors(container) {
+  const yard = getActiveYard();
+  if (!yard || !container || !els.yardSvg) return;
+  const group = els.yardSvg.querySelector(`.container-group[data-id="${container.id}"]`);
+  if (!group) {
+    renderActiveYard();
+    return;
+  }
+  let doorGroup = group.querySelector('.door-group');
+  const label = group.querySelector('.container-label');
+  if (!doorGroup) {
+    doorGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    doorGroup.classList.add('door-group');
+    if (label) {
+      group.insertBefore(doorGroup, label);
+    } else {
+      group.appendChild(doorGroup);
+    }
+  }
+  while (doorGroup.firstChild) {
+    doorGroup.removeChild(doorGroup.firstChild);
+  }
+  const dims = getContainerDimensions(yard, container);
+  const doors = Array.isArray(container.doors) ? container.doors : [];
+  doors.forEach((door) => {
+    const doorElement = createDoorElement(yard, dims, door);
+    if (doorElement) {
+      doorGroup.appendChild(doorElement);
+    }
+  });
 }
 
 function clampToBounds(position, width, height, yard) {

@@ -69,6 +69,8 @@
               <li><span class="key">Delete</span> remove</li>
               <li><span class="key">← → ↑ ↓</span> nudge</li>
               <li><span class="key">R</span> rotate 90°</li>
+              <li><span class="key">Scroll</span> zoom</li>
+              <li><span class="key">Middle drag</span> pan</li>
             </ul>
           </section>
 
@@ -153,6 +155,12 @@
               <label for="detailPhone">Client phone</label>
               <input id="detailPhone" name="phone" type="tel" autocomplete="off" placeholder="(555) 123-4567">
             </div>
+            <fieldset class="form-row door-fieldset">
+              <legend>Doors</legend>
+              <p class="door-hint">Add entry points and adjust their placement along the container edges.</p>
+              <div id="doorList" class="door-list" role="list"></div>
+              <button type="button" class="btn btn-ghost" id="addDoorBtn">Add door</button>
+            </fieldset>
           </form>
         </section>
       </aside>
