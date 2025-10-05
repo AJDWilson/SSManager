@@ -3,10 +3,11 @@
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.4;
   font-size: 16px;
-  --shell-background: #ffffff;
+  --shell-background: #e4e8f2;
   --surface: #f4f6fb;
   --surface-elevated: rgba(255, 255, 255, 0.72);
   --surface-strong: rgba(255, 255, 255, 0.92);
+  --header-background: #505666;
   --border: rgba(15, 23, 42, 0.08);
   --border-strong: rgba(15, 23, 42, 0.16);
   --text: #0f172a;
@@ -29,6 +30,7 @@
   --surface: #111b2c;
   --surface-elevated: rgba(15, 23, 42, 0.82);
   --surface-strong: rgba(15, 23, 42, 0.94);
+  --header-background: rgba(15, 23, 42, 0.94);
   --border: rgba(148, 163, 184, 0.22);
   --border-strong: rgba(148, 163, 184, 0.32);
   --text: #e2e8f0;
@@ -80,11 +82,20 @@ body {
   gap: 1.5rem;
   padding: 1rem 1.5rem;
   backdrop-filter: blur(18px);
-  background: var(--surface-strong);
+  background: var(--header-background);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+.app-shell[data-theme='light'] .app-header {
+  color: #f8fafc;
+}
+
+.app-shell[data-theme='light'] .header-actions .btn,
+.app-shell[data-theme='light'] .header-actions .switch-label {
+  color: inherit;
 }
 
 .brand-block {
@@ -119,6 +130,10 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
+}
+
+.app-shell[data-theme='light'] .tab-link {
+  color: rgba(248, 250, 252, 0.75);
 }
 
 .tab-link:focus-visible {
@@ -939,7 +954,7 @@ textarea {
 .container-rect {
   fill: var(--container-available);
   stroke: var(--container-available-stroke);
-  stroke-width: 2;
+  stroke-width: 1.2;
   rx: 0;
   ry: 0;
 }
@@ -964,7 +979,7 @@ textarea {
 }
 
 .container-group.is-selected .container-rect {
-  stroke-width: 2;
+  stroke-width: 1.8;
 }
 
 .container-group.is-selected.is-occupied .container-rect {

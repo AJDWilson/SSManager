@@ -1195,14 +1195,15 @@ function renderGrid(yard) {
   pattern.setAttribute('width', gridSize);
   pattern.setAttribute('height', gridSize);
 
-  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  rect.setAttribute('width', gridSize);
-  rect.setAttribute('height', gridSize);
-  rect.setAttribute('fill', 'none');
-  rect.setAttribute('stroke', gridStroke);
-  rect.setAttribute('stroke-width', 0.03);
+  const gridStrokeWidth = Math.min(gridSize * 0.05, 0.1);
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', `M 0 ${gridSize} H ${gridSize} M ${gridSize} 0 V ${gridSize}`);
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', gridStroke);
+  path.setAttribute('stroke-width', gridStrokeWidth);
+  path.setAttribute('shape-rendering', 'crispEdges');
 
-  pattern.appendChild(rect);
+  pattern.appendChild(path);
   defs.appendChild(pattern);
   els.yardSvg.appendChild(defs);
 
