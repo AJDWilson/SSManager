@@ -3,7 +3,7 @@
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.4;
   font-size: 16px;
-  --shell-background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(148, 163, 184, 0.15));
+  --shell-background: #ffffff;
   --surface: #f4f6fb;
   --surface-elevated: rgba(255, 255, 255, 0.72);
   --surface-strong: rgba(255, 255, 255, 0.92);
@@ -45,14 +45,14 @@ html, body {
   color: var(--text);
 }
 
+html[data-theme='dark'] {
+  --shell-background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+}
+
 body {
   display: flex;
   justify-content: center;
   align-items: stretch;
-}
-
-body[data-theme='dark'] {
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
 }
 
 .app-shell {
@@ -313,6 +313,11 @@ p.section-hint {
   font-weight: 600;
   cursor: pointer;
   text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--text);
 }
 
 .app-shell[data-theme='dark'] .layer-tab {
@@ -322,6 +327,28 @@ p.section-hint {
 .layer-tab.is-active {
   border-color: var(--accent);
   background: rgba(37, 99, 235, 0.18);
+}
+
+.layer-tab-label {
+  flex: 1;
+}
+
+.layer-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.app-shell[data-theme='dark'] .layer-tab-count {
+  background: rgba(148, 163, 184, 0.35);
+  color: var(--text);
 }
 
 .layer-actions {
@@ -833,20 +860,31 @@ textarea {
 }
 
 .container-rect {
-  fill: rgba(220, 38, 38, 0.65);
-  stroke: rgba(15, 23, 42, 0.75);
-  stroke-width: 1.5;
+  fill: rgba(220, 38, 38, 0.08);
+  stroke: #dc2626;
+  stroke-width: 1;
   rx: 0;
   ry: 0;
 }
 
 .container-group.is-occupied .container-rect {
-  fill: rgba(34, 197, 94, 0.7);
+  fill: rgba(34, 197, 94, 0.1);
+  stroke: #22c55e;
+}
+
+.app-shell[data-theme='dark'] .container-rect {
+  fill: rgba(220, 38, 38, 0.18);
+  stroke: #fca5a5;
+}
+
+.app-shell[data-theme='dark'] .container-group.is-occupied .container-rect {
+  fill: rgba(34, 197, 94, 0.25);
+  stroke: #86efac;
 }
 
 .container-label {
-  fill: rgba(15, 23, 42, 0.95);
-  font-size: 10px;
+  fill: var(--text);
+  font-size: 9px;
   font-weight: 700;
   pointer-events: none;
 }

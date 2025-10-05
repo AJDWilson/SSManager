@@ -1240,8 +1240,8 @@ function renderContainers(yard, containers, options = {}) {
     rect.classList.add('container-rect');
     rect.setAttribute('width', dims.width);
     rect.setAttribute('height', dims.height);
-    rect.setAttribute('rx', 0.2);
-    rect.setAttribute('ry', 0.2);
+    rect.setAttribute('rx', 0);
+    rect.setAttribute('ry', 0);
 
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.classList.add('container-label');
@@ -1249,8 +1249,9 @@ function renderContainers(yard, containers, options = {}) {
     text.setAttribute('y', dims.height / 2);
     text.setAttribute('dominant-baseline', 'middle');
     text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('fill', '#f8fafc');
-    text.setAttribute('font-size', Math.max(Math.min(dims.width, dims.height) * 0.32, 0.5));
+    const labelColor = state.theme === 'dark' ? '#e2e8f0' : '#0f172a';
+    text.setAttribute('fill', labelColor);
+    text.setAttribute('font-size', Math.max(Math.min(dims.width, dims.height) * 0.24, 0.45));
     const labelText = container.label && String(container.label).trim() ? String(container.label).trim() : `${container.widthFt}`;
     text.textContent = labelText;
 
@@ -2540,6 +2541,9 @@ function applyTheme() {
   if (!els.appShell || !els.themeToggle) return;
   const theme = state.theme === 'dark' ? 'dark' : 'light';
   els.appShell.setAttribute('data-theme', theme);
+  if (document.documentElement) {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
   if (document.body) {
     document.body.setAttribute('data-theme', theme);
   }
