@@ -18,20 +18,28 @@
   --radius-lg: 18px;
   --radius-md: 12px;
   --radius-sm: 8px;
+  --container-available: #dc2626;
+  --container-available-stroke: #f87171;
+  --container-occupied: #16a34a;
+  --container-occupied-stroke: #4ade80;
 }
 
 .app-shell[data-theme='dark'] {
-  --shell-background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
-  --surface: #0f172a;
-  --surface-elevated: rgba(15, 23, 42, 0.78);
-  --surface-strong: rgba(15, 23, 42, 0.92);
-  --border: rgba(148, 163, 184, 0.18);
-  --border-strong: rgba(148, 163, 184, 0.28);
+  --shell-background: #0b1120;
+  --surface: #111b2c;
+  --surface-elevated: rgba(15, 23, 42, 0.82);
+  --surface-strong: rgba(15, 23, 42, 0.94);
+  --border: rgba(148, 163, 184, 0.22);
+  --border-strong: rgba(148, 163, 184, 0.32);
   --text: #e2e8f0;
-  --text-muted: rgba(226, 232, 240, 0.68);
+  --text-muted: rgba(226, 232, 240, 0.7);
   --accent: #60a5fa;
   --accent-strong: #3b82f6;
   --shadow: 0 18px 40px rgba(2, 6, 23, 0.5);
+  --container-available: #dc2626;
+  --container-available-stroke: #fca5a5;
+  --container-occupied: #16a34a;
+  --container-occupied-stroke: #86efac;
 }
 
 * {
@@ -46,13 +54,15 @@ html, body {
 }
 
 html[data-theme='dark'] {
-  --shell-background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+  --shell-background: #0b1120;
+  background-color: var(--shell-background);
 }
 
 body {
   display: flex;
   justify-content: center;
   align-items: stretch;
+  color: var(--text);
 }
 
 .app-shell {
@@ -520,6 +530,56 @@ p.section-hint {
   gap: 0.35rem;
 }
 
+.app-shell,
+.panel-section,
+.layout-main,
+.layout-side,
+.settings-grid,
+.inventory-table-wrapper,
+.yards-panel,
+.occupants-header,
+.modal,
+.modal-content {
+  color: var(--text);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+label,
+legend,
+dt,
+th {
+  color: var(--text);
+}
+
+p,
+li,
+dd,
+span {
+  color: var(--text);
+}
+
+.section-hint,
+.scale-info,
+.switch-label,
+.help-chips li,
+.panel-subtitle,
+.tab-caption,
+.settings-note,
+.occupants-header p {
+  color: var(--text-muted);
+}
+
+.inventory-table th,
+.inventory-table td,
+.inventory-table thead {
+  color: var(--text);
+}
+
 input, select, textarea {
   font: inherit;
   padding: 0.55rem 0.7rem;
@@ -587,6 +647,7 @@ textarea {
   display: grid;
   place-items: center;
   cursor: pointer;
+  color: var(--text);
 }
 
 .switch {
@@ -615,8 +676,14 @@ textarea {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: white;
+  background: var(--surface-strong);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.18);
   transition: transform 0.2s ease;
+}
+
+.app-shell[data-theme='dark'] .switch input::after {
+  background: rgba(226, 232, 240, 0.9);
+  box-shadow: 0 2px 6px rgba(2, 6, 23, 0.45);
 }
 
 .switch input:checked {
@@ -781,6 +848,14 @@ textarea {
   background: rgba(148, 163, 184, 0.08);
 }
 
+.app-shell[data-theme='dark'] .inventory-table thead {
+  background: rgba(148, 163, 184, 0.22);
+}
+
+.app-shell[data-theme='dark'] .inventory-table tbody tr:nth-child(odd) {
+  background: rgba(148, 163, 184, 0.12);
+}
+
 .occupants-header {
   padding: 1.5rem 1.5rem 0;
 }
@@ -850,40 +925,32 @@ textarea {
 }
 
 /* SVG container styles */
+
 .container-group {
   cursor: grab;
   transition: filter 0.15s ease;
 }
 
-.container-group.dragging {
-  filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.35));
+.container-group.dragging,
+.container-group.is-selected {
+  filter: drop-shadow(0 0 22px rgba(59, 130, 246, 0.45));
 }
 
 .container-rect {
-  fill: rgba(220, 38, 38, 0.08);
-  stroke: #dc2626;
-  stroke-width: 1;
+  fill: var(--container-available);
+  stroke: var(--container-available-stroke);
+  stroke-width: 2;
   rx: 0;
   ry: 0;
 }
 
 .container-group.is-occupied .container-rect {
-  fill: rgba(34, 197, 94, 0.1);
-  stroke: #22c55e;
-}
-
-.app-shell[data-theme='dark'] .container-rect {
-  fill: rgba(220, 38, 38, 0.18);
-  stroke: #fca5a5;
-}
-
-.app-shell[data-theme='dark'] .container-group.is-occupied .container-rect {
-  fill: rgba(34, 197, 94, 0.25);
-  stroke: #86efac;
+  fill: var(--container-occupied);
+  stroke: var(--container-occupied-stroke);
 }
 
 .container-label {
-  fill: var(--text);
+  fill: #ffffff;
   font-size: 9px;
   font-weight: 700;
   pointer-events: none;
@@ -897,8 +964,15 @@ textarea {
 }
 
 .container-group.is-selected .container-rect {
-  stroke: var(--accent-strong);
   stroke-width: 2;
+}
+
+.container-group.is-selected.is-occupied .container-rect {
+  stroke: var(--container-occupied-stroke);
+}
+
+.container-group.is-selected:not(.is-occupied) .container-rect {
+  stroke: var(--container-available-stroke);
 }
 
 .container-group.onion-skin {
@@ -907,6 +981,10 @@ textarea {
 
 .container-group.onion-skin .container-rect {
   opacity: 0.35;
+}
+
+.container-group.onion-skin .container-label {
+  opacity: 0.6;
 }
 
 .door-shape {
