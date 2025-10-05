@@ -56,6 +56,7 @@ const els = {
   tabLinks: Array.from(document.querySelectorAll('.tab-link')),
   tabPanels: {
     layout: document.getElementById('layoutPanel'),
+    yards: document.getElementById('yardsPanel'),
     settings: document.getElementById('settingsPanel'),
     occupants: document.getElementById('occupantsPanel'),
   },
@@ -140,7 +141,7 @@ function loadState() {
       state.theme = storedTheme;
     }
     const storedTab = localStorage.getItem(TAB_KEY);
-    if (storedTab === 'layout' || storedTab === 'settings' || storedTab === 'occupants') {
+    if (['layout', 'yards', 'settings', 'occupants'].includes(storedTab)) {
       state.activeTab = storedTab;
     }
   } catch (err) {
@@ -601,7 +602,7 @@ function renderAll() {
 }
 
 function setActiveTab(tab, options = {}) {
-  const allowed = ['layout', 'settings', 'occupants'];
+  const allowed = ['layout', 'yards', 'settings', 'occupants'];
   const targetTab = allowed.includes(tab) ? tab : 'layout';
   const { force = false, silent = false } = options;
   if (!force && state.activeTab === targetTab) {
@@ -626,6 +627,8 @@ function setActiveTab(tab, options = {}) {
     if (targetTab === 'layout') {
       renderActiveYard();
       updateDetailPanel();
+    } else if (targetTab === 'yards') {
+      renderYardList();
     } else if (targetTab === 'settings') {
       renderDefaultRates();
       renderCustomFieldList();
@@ -2537,5 +2540,8 @@ function applyTheme() {
   if (!els.appShell || !els.themeToggle) return;
   const theme = state.theme === 'dark' ? 'dark' : 'light';
   els.appShell.setAttribute('data-theme', theme);
+  if (document.body) {
+    document.body.setAttribute('data-theme', theme);
+  }
   els.themeToggle.checked = theme === 'dark';
 }

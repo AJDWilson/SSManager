@@ -14,6 +14,7 @@
       </div>
       <nav class="tab-nav" role="tablist">
         <button id="layoutTab" type="button" class="tab-link is-active" data-tab="layout" role="tab" aria-controls="layoutPanel" aria-selected="true">Layout</button>
+        <button id="yardsTab" type="button" class="tab-link" data-tab="yards" role="tab" aria-controls="yardsPanel" aria-selected="false">Yards</button>
         <button id="settingsTab" type="button" class="tab-link" data-tab="settings" role="tab" aria-controls="settingsPanel" aria-selected="false">Settings</button>
         <button id="occupantsTab" type="button" class="tab-link" data-tab="occupants" role="tab" aria-controls="occupantsPanel" aria-selected="false">Occupants</button>
       </nav>
@@ -30,19 +31,7 @@
     <main class="tab-panels">
       <section id="layoutPanel" class="tab-panel is-active" role="tabpanel" aria-labelledby="layoutTab">
         <div class="layout-grid">
-          <aside class="layout-side" aria-label="Projects and palette">
-            <section class="panel-section">
-              <div class="section-header">
-                <h2>Yards</h2>
-                <div class="section-actions">
-                  <button id="renameYardBtn" type="button" class="btn btn-ghost">Rename</button>
-                  <button id="duplicateYardBtn" type="button" class="btn btn-ghost">Duplicate</button>
-                  <button id="deleteYardBtn" type="button" class="btn btn-danger">Delete</button>
-                </div>
-              </div>
-              <ul id="yardList" class="yard-list" aria-label="Saved yards"></ul>
-            </section>
-
+          <aside class="layout-side" aria-label="Palette and layers">
             <section class="panel-section palette" aria-label="Container palette">
               <div class="section-header">
                 <h2>Containers</h2>
@@ -156,6 +145,23 @@
             </fieldset>
           </form>
         </aside>
+      </section>
+
+      <section id="yardsPanel" class="tab-panel" role="tabpanel" aria-labelledby="yardsTab" hidden>
+        <div class="yards-layout">
+          <section class="panel-section yards-panel" aria-label="Manage yards">
+            <div class="section-header">
+              <h2>Your yards</h2>
+              <div class="section-actions">
+                <button id="renameYardBtn" type="button" class="btn btn-ghost">Rename</button>
+                <button id="duplicateYardBtn" type="button" class="btn btn-ghost">Duplicate</button>
+                <button id="deleteYardBtn" type="button" class="btn btn-danger">Delete</button>
+              </div>
+            </div>
+            <p class="section-hint">Select a yard to start planning or manage its details.</p>
+            <ul id="yardList" class="yard-list" aria-label="Saved yards"></ul>
+          </section>
+        </div>
       </section>
 
       <section id="settingsPanel" class="tab-panel" role="tabpanel" aria-labelledby="settingsTab">

@@ -3,6 +3,7 @@
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.4;
   font-size: 16px;
+  --shell-background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(148, 163, 184, 0.15));
   --surface: #f4f6fb;
   --surface-elevated: rgba(255, 255, 255, 0.72);
   --surface-strong: rgba(255, 255, 255, 0.92);
@@ -20,6 +21,7 @@
 }
 
 .app-shell[data-theme='dark'] {
+  --shell-background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
   --surface: #0f172a;
   --surface-elevated: rgba(15, 23, 42, 0.78);
   --surface-strong: rgba(15, 23, 42, 0.92);
@@ -39,7 +41,7 @@
 html, body {
   height: 100%;
   margin: 0;
-  background: var(--surface);
+  background: var(--shell-background);
   color: var(--text);
 }
 
@@ -49,12 +51,16 @@ body {
   align-items: stretch;
 }
 
+body[data-theme='dark'] {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+}
+
 .app-shell {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(148, 163, 184, 0.15));
+  background: var(--shell-background);
 }
 
 .app-header {
@@ -149,10 +155,25 @@ main.tab-panels {
 .layout-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 380px 1fr;
   gap: 1.25rem;
   padding: 1.25rem 1.5rem;
   overflow: hidden;
+}
+
+.yards-layout {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem;
+  overflow: auto;
+}
+
+.yards-panel {
+  width: min(540px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .layout-side {
@@ -161,6 +182,7 @@ main.tab-panels {
   gap: 1.25rem;
   overflow-y: auto;
   padding-right: 0.5rem;
+  min-width: 0;
 }
 
 .layout-main {
@@ -196,11 +218,16 @@ main.tab-panels {
 .section-actions {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .section-hint {
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+p.section-hint {
+  margin: 0 0 0.75rem;
 }
 
 .yard-list {
@@ -515,6 +542,11 @@ textarea {
   color: #b91c1c;
 }
 
+.app-shell[data-theme='dark'] .btn-danger {
+  background: rgba(248, 113, 113, 0.2);
+  color: #fecaca;
+}
+
 .btn-ghost {
   background: rgba(148, 163, 184, 0.12);
 }
@@ -804,8 +836,8 @@ textarea {
   fill: rgba(220, 38, 38, 0.65);
   stroke: rgba(15, 23, 42, 0.75);
   stroke-width: 1.5;
-  rx: 4;
-  ry: 4;
+  rx: 0;
+  ry: 0;
 }
 
 .container-group.is-occupied .container-rect {
@@ -814,7 +846,7 @@ textarea {
 
 .container-label {
   fill: rgba(15, 23, 42, 0.95);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   pointer-events: none;
 }
