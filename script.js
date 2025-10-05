@@ -1,22 +1,21 @@
 const STORAGE_KEY = 'yards_v1';
 const ACTIVE_KEY = 'yards_active_id_v1';
 const THEME_KEY = 'ssmanager_theme_v1';
+const TAB_KEY = 'ssmanager_active_tab_v1';
 const containerDepthFt = 8;
 const DOOR_LENGTH_FT = 3;
 const DOOR_THICKNESS_FT = 0.75;
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 6;
 const DOOR_EDGES = ['north', 'south', 'east', 'west'];
-const DEFAULT_ENTRANCE_WIDTH_FT = 24;
-const ENTRANCE_DEPTH_FT = 6;
 
 /** @type {const} */
 const containerTypes = [
-  { type: '5ft', widthFt: 5 },
+  { type: '8ft', widthFt: 8 },
   { type: '10ft', widthFt: 10 },
   { type: '20ft', widthFt: 20 },
   { type: '40ft', widthFt: 40 },
-  { type: '50ft', widthFt: 50 },
+  { type: '45ft', widthFt: 45 },
 ];
 
 const containerTypeKeys = containerTypes.map((item) => item.type);
@@ -35,6 +34,7 @@ const state = {
   scale: 1,
   view: { zoom: 1, panX: 0, panY: 0, userAdjusted: false },
   theme: 'light',
+  activeTab: 'layout',
 };
 
 let selectedContainerId = null;
@@ -53,6 +53,12 @@ const panState = {
 
 const els = {
   appShell: document.querySelector('.app-shell'),
+  tabLinks: Array.from(document.querySelectorAll('.tab-link')),
+  tabPanels: {
+    layout: document.getElementById('layoutPanel'),
+    settings: document.getElementById('settingsPanel'),
+    occupants: document.getElementById('occupantsPanel'),
+  },
   yardList: document.getElementById('yardList'),
   newYardBtn: document.getElementById('newYardBtn'),
   renameYardBtn: document.getElementById('renameYardBtn'),
@@ -79,21 +85,27 @@ const els = {
   addLayerBtn: document.getElementById('addLayerBtn'),
   renameLayerBtn: document.getElementById('renameLayerBtn'),
   deleteLayerBtn: document.getElementById('deleteLayerBtn'),
-  entranceList: document.getElementById('entranceList'),
-  addEntranceBtn: document.getElementById('addEntranceBtn'),
+  containerDetails: document.getElementById('containerDetails'),
+  detailsCloseBtn: document.getElementById('detailsCloseBtn'),
   detailPlaceholder: document.getElementById('detailPlaceholder'),
   containerForm: document.getElementById('containerForm'),
   detailTitle: document.getElementById('detailTitle'),
   detailRenter: document.getElementById('detailRenter'),
-  detailRate: document.getElementById('detailRate'),
+  detailEmail: document.getElementById('detailEmail'),
   detailPhone: document.getElementById('detailPhone'),
+  detailAddress: document.getElementById('detailAddress'),
+  detailStartDate: document.getElementById('detailStartDate'),
+  detailRate: document.getElementById('detailRate'),
   detailOccupied: document.getElementById('detailOccupied'),
+  customFieldContainer: document.getElementById('customFieldContainer'),
   doorList: document.getElementById('doorList'),
   addDoorBtn: document.getElementById('addDoorBtn'),
-  inventoryBody: document.getElementById('inventoryBody'),
-  overviewCount: document.getElementById('overviewCount'),
-  overviewOccupied: document.getElementById('overviewOccupied'),
-  overviewRevenue: document.getElementById('overviewRevenue'),
+  customFieldForm: document.getElementById('customFieldForm'),
+  customFieldLabel: document.getElementById('customFieldLabel'),
+  customFieldType: document.getElementById('customFieldType'),
+  customFieldList: document.getElementById('customFieldList'),
+  occupantTableHead: document.getElementById('occupantTableHead'),
+  occupantTableBody: document.getElementById('occupantTableBody'),
   themeToggle: document.getElementById('themeToggle'),
 };
 const createYardTriggers = Array.from(document.querySelectorAll('[data-trigger="create-yard"]'));
@@ -127,11 +139,16 @@ function loadState() {
     if (storedTheme === 'light' || storedTheme === 'dark') {
       state.theme = storedTheme;
     }
+    const storedTab = localStorage.getItem(TAB_KEY);
+    if (storedTab === 'layout' || storedTab === 'settings' || storedTab === 'occupants') {
+      state.activeTab = storedTab;
+    }
   } catch (err) {
     console.warn('Failed to load yards from storage', err);
     state.yards = [];
     state.activeYardId = null;
     state.theme = 'light';
+    state.activeTab = 'layout';
   }
   if (!state.activeYardId && state.yards.length > 0) {
     state.activeYardId = state.yards[0].id;
@@ -144,6 +161,7 @@ function saveState() {
     localStorage.setItem(ACTIVE_KEY, state.activeYardId);
   }
   localStorage.setItem(THEME_KEY, state.theme);
+  localStorage.setItem(TAB_KEY, state.activeTab);
 }
 
 function upgradeYard(yard) {
@@ -190,19 +208,14 @@ function upgradeYard(yard) {
   }
 
   const defaultRates = sanitizeDefaultRates(yard.defaultRates);
-  const entrances = sanitizeEntrances(yard.entrances, {
-    width,
-    height,
-    unit: safeUnit,
-  });
+  const customFields = sanitizeCustomFields(yard.customFields);
   const activeLayerId = layers.some((layer) => layer.id === yard.activeLayerId)
     ? yard.activeLayerId
     : layers[0].id;
   const allContainers = layers.flatMap((layer) => layer.containers);
   const nextNumber = smallestAvailableNumericLabel(allContainers);
-  const nextEntranceNumber = smallestAvailableEntranceSequence(entrances);
 
-  return {
+  const result = {
     id: yard.id || generateId(),
     name,
     width: Number(width.toFixed(3)),
@@ -211,10 +224,14 @@ function upgradeYard(yard) {
     layers,
     activeLayerId,
     defaultRates,
+    customFields,
     nextContainerNumber: nextNumber,
-    entrances,
-    nextEntranceNumber,
   };
+  result.layers.forEach((layer) => {
+    layer.containers.forEach((container) => ensureContainerCustomValues(result, container));
+  });
+  result.nextContainerNumber = ensureNextContainerNumber(result);
+  return result;
 }
 
 function upgradeLayer(layer, fallbackName) {
@@ -250,57 +267,60 @@ function sanitizeDefaultRates(rates) {
   return defaults;
 }
 
-function sanitizeEntrances(entries, yardMeta) {
-  if (!yardMeta || !Number.isFinite(yardMeta.width) || !Number.isFinite(yardMeta.height)) {
+function sanitizeCustomFields(fields) {
+  if (!Array.isArray(fields)) {
     return [];
   }
   const result = [];
-  const usedSequences = new Set();
-  if (Array.isArray(entries)) {
-    entries.forEach((entry) => {
-      const upgraded = upgradeEntrance(entry, yardMeta, usedSequences);
-      if (upgraded) {
-        usedSequences.add(upgraded.sequence);
-        result.push(upgraded);
-      }
+  fields.forEach((field) => {
+    if (!field || typeof field !== 'object') return;
+    const rawLabel = typeof field.label === 'string' ? field.label.trim() : '';
+    if (!rawLabel) return;
+    const type = field.type === 'boolean' ? 'boolean' : 'text';
+    result.push({
+      id: field.id || generateId(),
+      label: rawLabel,
+      type,
     });
-  }
+  });
   return result;
 }
 
-function upgradeEntrance(entrance, yardMeta, usedSequences) {
-  if (!entrance || typeof entrance !== 'object') {
-    return null;
+function sanitizeCustomValues(values) {
+  if (!values || typeof values !== 'object') {
+    return {};
   }
-  const edge = DOOR_EDGES.includes(entrance.edge) ? entrance.edge : 'south';
-  let offset = Number(entrance.offset);
-  if (!Number.isFinite(offset)) {
-    offset = 0.5;
+  const result = {};
+  Object.keys(values).forEach((key) => {
+    const value = values[key];
+    if (typeof value === 'boolean' || typeof value === 'string' || value === null) {
+      result[key] = value;
+    }
+  });
+  return result;
+}
+
+function ensureContainerCustomValues(yard, container) {
+  if (!yard || !container) {
+    return;
   }
-  offset = Math.min(Math.max(offset, 0), 1);
-
-  let width = Number(entrance.width);
-  if (!Number.isFinite(width) || width <= 0) {
-    width = convertFtToUnit(DEFAULT_ENTRANCE_WIDTH_FT, yardMeta.unit);
-  }
-  width = clampEntranceWidth(width, edge, yardMeta);
-
-  let sequence = Number.parseInt(entrance.sequence, 10);
-  if (!Number.isFinite(sequence) || sequence <= 0 || (usedSequences && usedSequences.has(sequence))) {
-    sequence = nextAvailableSequence(usedSequences);
-  }
-
-  const rawName = typeof entrance.name === 'string' ? entrance.name.trim() : '';
-  const name = rawName || `Entrance ${sequence}`;
-
-  return {
-    id: entrance.id || generateId(),
-    edge,
-    offset,
-    width: Number(width.toFixed(3)),
-    sequence,
-    name,
-  };
+  container.customValues = sanitizeCustomValues(container.customValues);
+  const values = container.customValues;
+  const fields = Array.isArray(yard.customFields) ? yard.customFields : [];
+  fields.forEach((field) => {
+    if (!(field.id in values)) {
+      values[field.id] = field.type === 'boolean' ? false : '';
+    } else if (field.type === 'boolean') {
+      values[field.id] = Boolean(values[field.id]);
+    } else {
+      values[field.id] = values[field.id] != null ? String(values[field.id]) : '';
+    }
+  });
+  Object.keys(values).forEach((key) => {
+    if (!fields.some((field) => field.id === key)) {
+      delete values[key];
+    }
+  });
 }
 
 function nextAvailableSequence(usedSequences) {
@@ -379,11 +399,18 @@ function upgradeContainer(container) {
     renter: container.renter ? String(container.renter) : '',
     monthlyRate: container.monthlyRate ? String(container.monthlyRate) : '',
     phone: container.phone ? String(container.phone) : '',
+    email: container.email ? String(container.email) : '',
+    address: container.address ? String(container.address) : '',
+    startDate:
+      typeof container.startDate === 'string' && container.startDate.trim()
+        ? container.startDate.trim()
+        : '',
     occupied:
       typeof container.occupied === 'boolean'
         ? container.occupied
         : Boolean(container.renter && String(container.renter).trim()),
     doors: sanitizeDoors(container.doors),
+    customValues: sanitizeCustomValues(container.customValues),
   };
 }
 
@@ -430,32 +457,6 @@ function previewNextContainerLabel(yard) {
   return String(next);
 }
 
-function smallestAvailableEntranceSequence(entrances) {
-  if (!Array.isArray(entrances) || entrances.length === 0) {
-    return 1;
-  }
-  const used = new Set();
-  entrances.forEach((entrance) => {
-    const seq = Number.parseInt(entrance?.sequence, 10);
-    if (Number.isFinite(seq) && seq > 0) {
-      used.add(seq);
-    }
-  });
-  let candidate = 1;
-  while (used.has(candidate)) {
-    candidate += 1;
-  }
-  return candidate;
-}
-
-function ensureNextEntranceNumber(yard) {
-  const next = smallestAvailableEntranceSequence(yard?.entrances || []);
-  if (yard) {
-    yard.nextEntranceNumber = next;
-  }
-  return next;
-}
-
 function commitNextContainerLabel(yard) {
   if (!yard) {
     return;
@@ -496,8 +497,23 @@ function attachEventListeners() {
     renderScaleInfo();
   });
 
+  els.tabLinks.forEach((link) => {
+    link.addEventListener('click', () => {
+      const tab = link.dataset.tab;
+      if (!tab || tab === state.activeTab) return;
+      setActiveTab(tab);
+    });
+  });
+
   if (els.defaultRatesForm) {
     els.defaultRatesForm.addEventListener('input', handleDefaultRateInput);
+  }
+
+  if (els.customFieldForm) {
+    els.customFieldForm.addEventListener('submit', handleCustomFieldFormSubmit);
+  }
+  if (els.customFieldList) {
+    els.customFieldList.addEventListener('click', handleCustomFieldListClick);
   }
 
   if (els.layerTabs) {
@@ -520,6 +536,10 @@ function attachEventListeners() {
       saveState();
       renderActiveYard();
     });
+  }
+
+  if (els.detailsCloseBtn) {
+    els.detailsCloseBtn.addEventListener('click', () => selectContainer(null));
   }
 
   els.yardSvg.addEventListener('pointerdown', (event) => {
@@ -558,15 +578,6 @@ function attachEventListeners() {
     els.doorList.addEventListener('click', handleDoorListClick);
   }
 
-  if (els.addEntranceBtn) {
-    els.addEntranceBtn.addEventListener('click', handleAddEntrance);
-  }
-  if (els.entranceList) {
-    els.entranceList.addEventListener('input', handleEntranceListInput);
-    els.entranceList.addEventListener('change', handleEntranceListInput);
-    els.entranceList.addEventListener('click', handleEntranceListClick);
-  }
-
   if (els.yardWrapper) {
     els.yardWrapper.addEventListener('wheel', handleWheel, { passive: false });
     els.yardWrapper.addEventListener('pointerdown', handleViewPointerDown);
@@ -578,15 +589,50 @@ function attachEventListeners() {
 
 function renderAll() {
   applyTheme();
+  setActiveTab(state.activeTab, { force: true, silent: true });
   renderYardList();
   renderDefaultRates();
   renderLayerList();
-  renderEntranceList();
   renderActiveYard();
   renderScaleInfo();
-  renderInventory();
-  renderOverview();
+  renderCustomFieldList();
+  renderOccupantTable();
   updateDetailPanel();
+}
+
+function setActiveTab(tab, options = {}) {
+  const allowed = ['layout', 'settings', 'occupants'];
+  const targetTab = allowed.includes(tab) ? tab : 'layout';
+  const { force = false, silent = false } = options;
+  if (!force && state.activeTab === targetTab) {
+    return;
+  }
+  state.activeTab = targetTab;
+  els.tabLinks.forEach((link) => {
+    const isActive = link.dataset.tab === targetTab;
+    link.classList.toggle('is-active', isActive);
+    link.setAttribute('aria-selected', String(isActive));
+  });
+  Object.entries(els.tabPanels).forEach(([key, panel]) => {
+    if (!panel) return;
+    const active = key === targetTab;
+    panel.classList.toggle('is-active', active);
+    panel.hidden = !active;
+  });
+  if (!silent) {
+    saveState();
+  }
+  if (!silent) {
+    if (targetTab === 'layout') {
+      renderActiveYard();
+      updateDetailPanel();
+    } else if (targetTab === 'settings') {
+      renderDefaultRates();
+      renderCustomFieldList();
+    } else if (targetTab === 'occupants') {
+      renderOccupantTable();
+    }
+  }
 }
 
 function renderPalette() {
@@ -659,6 +705,224 @@ function handleDefaultRateInput(event) {
   saveState();
 }
 
+function handleCustomFieldFormSubmit(event) {
+  event.preventDefault();
+  const yard = getActiveYard();
+  if (!yard) {
+    return;
+  }
+  const labelInput = els.customFieldLabel;
+  const typeSelect = els.customFieldType;
+  const label = labelInput ? labelInput.value.trim() : '';
+  const typeValue = typeSelect ? typeSelect.value : 'text';
+  if (!label) {
+    showHint('Enter a label for the custom field.');
+    if (labelInput) labelInput.focus();
+    return;
+  }
+  const type = typeValue === 'boolean' ? 'boolean' : 'text';
+  const field = { id: generateId(), label, type };
+  yard.customFields.push(field);
+  yard.layers.forEach((layer) => {
+    layer.containers.forEach((container) => ensureContainerCustomValues(yard, container));
+  });
+  if (labelInput) {
+    labelInput.value = '';
+  }
+  if (typeSelect) {
+    typeSelect.value = 'boolean';
+  }
+  saveState();
+  renderCustomFieldList();
+  renderOccupantTable();
+  updateDetailPanel();
+}
+
+function handleCustomFieldListClick(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (!target.matches('[data-action="remove-field"]')) return;
+  const fieldId = target.dataset.fieldId;
+  if (!fieldId) return;
+  const yard = getActiveYard();
+  if (!yard) return;
+  yard.customFields = yard.customFields.filter((field) => field.id !== fieldId);
+  yard.layers.forEach((layer) => {
+    layer.containers.forEach((container) => {
+      if (container.customValues && fieldId in container.customValues) {
+        delete container.customValues[fieldId];
+      }
+    });
+  });
+  saveState();
+  renderCustomFieldList();
+  renderOccupantTable();
+  updateDetailPanel();
+}
+
+function renderCustomFieldList() {
+  if (!els.customFieldList || !els.customFieldForm) return;
+  const yard = getActiveYard();
+  const inputs = [els.customFieldLabel, els.customFieldType, els.customFieldForm.querySelector('button[type="submit"]')];
+  const disable = !yard;
+  inputs.forEach((input) => {
+    if (input) {
+      input.disabled = disable;
+    }
+  });
+  els.customFieldList.innerHTML = '';
+  if (!yard) {
+    const empty = document.createElement('p');
+    empty.className = 'custom-empty';
+    empty.textContent = 'Create a yard to manage custom fields.';
+    els.customFieldList.appendChild(empty);
+    return;
+  }
+
+  yard.customFields = sanitizeCustomFields(yard.customFields);
+  yard.layers.forEach((layer) => {
+    layer.containers.forEach((container) => ensureContainerCustomValues(yard, container));
+  });
+  if (!yard.customFields.length) {
+    const empty = document.createElement('p');
+    empty.className = 'custom-empty';
+    empty.textContent = 'No custom fields yet.';
+    els.customFieldList.appendChild(empty);
+    return;
+  }
+
+  yard.customFields.forEach((field) => {
+    const item = document.createElement('div');
+    item.className = 'custom-field-item';
+    item.dataset.fieldId = field.id;
+
+    const info = document.createElement('div');
+    info.className = 'custom-field-info';
+    const label = document.createElement('strong');
+    label.textContent = field.label;
+    const type = document.createElement('span');
+    type.className = 'custom-field-type';
+    type.textContent = field.type === 'boolean' ? 'Toggle' : 'Text';
+    info.appendChild(label);
+    info.appendChild(type);
+
+    const actions = document.createElement('div');
+    actions.className = 'custom-field-controls';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn btn-danger';
+    remove.dataset.action = 'remove-field';
+    remove.dataset.fieldId = field.id;
+    remove.textContent = 'Remove';
+    actions.appendChild(remove);
+
+    item.appendChild(info);
+    item.appendChild(actions);
+    els.customFieldList.appendChild(item);
+  });
+}
+
+function renderOccupantTable() {
+  if (!els.occupantTableHead || !els.occupantTableBody) return;
+  const yard = getActiveYard();
+  els.occupantTableHead.innerHTML = '';
+  els.occupantTableBody.innerHTML = '';
+
+  const headRow = document.createElement('tr');
+  const baseColumns = [
+    'Container',
+    'Size',
+    'Renter',
+    'Phone',
+    'Email',
+    'Address',
+    'Start date',
+    'Monthly rate',
+    'Occupied',
+  ];
+  baseColumns.forEach((label) => {
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.textContent = label;
+    headRow.appendChild(th);
+  });
+  const customFields = yard ? yard.customFields : [];
+  if (Array.isArray(customFields)) {
+    customFields.forEach((field) => {
+      const th = document.createElement('th');
+      th.scope = 'col';
+      th.textContent = field.label;
+      headRow.appendChild(th);
+    });
+  }
+  els.occupantTableHead.appendChild(headRow);
+
+  if (!yard) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = baseColumns.length + (customFields?.length || 0);
+    cell.textContent = 'Create a yard to view container occupants.';
+    row.appendChild(cell);
+    els.occupantTableBody.appendChild(row);
+    return;
+  }
+
+  const containers = getAllContainers(yard);
+  if (!containers.length) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = baseColumns.length + (customFields?.length || 0);
+    cell.textContent = 'No containers yet.';
+    row.appendChild(cell);
+    els.occupantTableBody.appendChild(row);
+    return;
+  }
+
+  const sorted = containers.slice().sort((a, b) => {
+    const aNum = parseNumericLabel(a.label);
+    const bNum = parseNumericLabel(b.label);
+    if (aNum !== null && bNum !== null) {
+      return aNum - bNum;
+    }
+    return String(a.label || '').localeCompare(String(b.label || ''));
+  });
+
+  sorted.forEach((container) => {
+    const row = document.createElement('tr');
+    const label = container.label && container.label.trim() ? container.label.trim() : `${container.widthFt}`;
+    const rateNumber = Number(container.monthlyRate);
+    const cells = [
+      label,
+      `${container.widthFt} ft`,
+      container.renter || '—',
+      container.phone || '—',
+      container.email || '—',
+      container.address || '—',
+      container.startDate || '—',
+      container.monthlyRate && Number.isFinite(rateNumber) ? formatCurrency(rateNumber) : '—',
+      container.occupied ? 'Yes' : 'No',
+    ];
+    cells.forEach((value) => {
+      const td = document.createElement('td');
+      td.textContent = value;
+      row.appendChild(td);
+    });
+    if (Array.isArray(customFields)) {
+      customFields.forEach((field) => {
+        const td = document.createElement('td');
+        const raw = container.customValues ? container.customValues[field.id] : undefined;
+        if (field.type === 'boolean') {
+          td.textContent = raw ? 'Yes' : 'No';
+        } else {
+          td.textContent = raw ? String(raw) : '—';
+        }
+        row.appendChild(td);
+      });
+    }
+    els.occupantTableBody.appendChild(row);
+  });
+}
+
 function renderYardList() {
   els.yardList.innerHTML = '';
   state.yards.forEach((yard) => {
@@ -678,7 +942,7 @@ function renderYardList() {
 
     button.appendChild(title);
     button.appendChild(meta);
-    button.classList.toggle('active', yard.id === state.activeYardId);
+    button.classList.toggle('is-active', yard.id === state.activeYardId);
     button.addEventListener('click', () => {
       state.activeYardId = yard.id;
       saveState();
@@ -725,7 +989,7 @@ function renderLayerList() {
     count.textContent = `${layer.containers.length}`;
     button.appendChild(label);
     button.appendChild(count);
-    button.classList.toggle('active', layer.id === yard.activeLayerId);
+    button.classList.toggle('is-active', layer.id === yard.activeLayerId);
     els.layerTabs.appendChild(button);
   });
 
@@ -738,132 +1002,6 @@ function renderLayerList() {
   if (els.deleteLayerBtn) {
     els.deleteLayerBtn.disabled = layers.length <= 1;
   }
-}
-
-function renderEntranceList() {
-  if (!els.entranceList) return;
-  const yard = getActiveYard();
-  els.entranceList.innerHTML = '';
-  if (!yard) {
-    const empty = document.createElement('p');
-    empty.className = 'entrance-empty';
-    empty.textContent = 'Create a yard to add entrances.';
-    els.entranceList.appendChild(empty);
-    if (els.addEntranceBtn) {
-      els.addEntranceBtn.disabled = true;
-    }
-    return;
-  }
-
-  if (els.addEntranceBtn) {
-    els.addEntranceBtn.disabled = false;
-  }
-
-  yard.entrances = Array.isArray(yard.entrances) ? yard.entrances : [];
-
-  if (yard.entrances.length === 0) {
-    const empty = document.createElement('p');
-    empty.className = 'entrance-empty';
-    empty.textContent = 'No entrances yet. Add gates for access points.';
-    els.entranceList.appendChild(empty);
-    return;
-  }
-
-  yard.entrances
-    .slice()
-    .sort((a, b) => a.sequence - b.sequence)
-    .forEach((entrance) => {
-      const item = document.createElement('div');
-      item.className = 'entrance-item';
-      item.dataset.entranceId = entrance.id;
-
-      const head = document.createElement('div');
-      head.className = 'entrance-head';
-
-      const badge = document.createElement('span');
-      badge.className = 'entrance-sequence';
-      badge.textContent = `#${entrance.sequence}`;
-
-      const name = document.createElement('input');
-      name.type = 'text';
-      name.name = 'name';
-      name.className = 'entrance-name';
-      name.value = entrance.name || `Entrance ${entrance.sequence}`;
-      name.placeholder = `Entrance ${entrance.sequence}`;
-      name.setAttribute('aria-label', `Entrance ${entrance.sequence} name`);
-
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'btn-icon entrance-remove';
-      remove.dataset.action = 'remove-entrance';
-      remove.setAttribute('aria-label', `Remove entrance ${entrance.name}`);
-      remove.textContent = '×';
-
-      head.appendChild(badge);
-      head.appendChild(name);
-      head.appendChild(remove);
-
-      const grid = document.createElement('div');
-      grid.className = 'entrance-grid';
-
-      const edgeField = document.createElement('label');
-      edgeField.className = 'entrance-field';
-      edgeField.textContent = 'Edge';
-      const edgeSelect = document.createElement('select');
-      edgeSelect.name = 'edge';
-      DOOR_EDGES.forEach((edge) => {
-        const option = document.createElement('option');
-        option.value = edge;
-        option.textContent = edge.charAt(0).toUpperCase() + edge.slice(1);
-        if (edge === entrance.edge) {
-          option.selected = true;
-        }
-        edgeSelect.appendChild(option);
-      });
-      edgeField.appendChild(edgeSelect);
-
-      const widthField = document.createElement('label');
-      widthField.className = 'entrance-field';
-      widthField.textContent = 'Width';
-      const widthWrapper = document.createElement('div');
-      widthWrapper.className = 'entrance-width-wrapper';
-      const widthInput = document.createElement('input');
-      widthInput.type = 'number';
-      widthInput.name = 'width';
-      widthInput.step = '0.01';
-      widthInput.min = '0';
-      widthInput.value = formatNumber(entrance.width);
-      const unitTag = document.createElement('span');
-      unitTag.className = 'unit-tag';
-      unitTag.textContent = yard.unit;
-      widthWrapper.appendChild(widthInput);
-      widthWrapper.appendChild(unitTag);
-      widthField.appendChild(widthWrapper);
-
-      const offsetField = document.createElement('label');
-      offsetField.className = 'entrance-field entrance-offset-field';
-      offsetField.textContent = 'Offset';
-      const offsetSlider = document.createElement('input');
-      offsetSlider.type = 'range';
-      offsetSlider.name = 'offset';
-      offsetSlider.min = '0';
-      offsetSlider.max = '100';
-      offsetSlider.step = '1';
-      offsetSlider.value = Math.round(Math.min(Math.max(entrance.offset, 0), 1) * 100);
-      const offsetValue = document.createElement('span');
-      offsetValue.className = 'entrance-offset-value';
-      offsetValue.textContent = `${Math.round(entrance.offset * 100)}%`;
-      offsetField.appendChild(offsetSlider);
-      offsetField.appendChild(offsetValue);
-
-      grid.appendChild(edgeField);
-      grid.appendChild(widthField);
-      grid.appendChild(offsetField);
-
-      item.appendChild(head);
-      item.appendChild(grid);
-      els.entranceList.appendChild(item);
-    });
 }
 
 function handleLayerTabClick(event) {
@@ -1005,8 +1143,13 @@ function renderActiveYard() {
   els.yardSvg.style.height = `${yard.height * state.baseScale}px`;
 
   renderGrid(yard);
-  renderEntrances(yard);
-  renderContainers(yard, containers);
+  const layerIndex = yard.layers.findIndex((layer) => layer.id === activeLayer.id);
+  if (layerIndex > 0) {
+    yard.layers.slice(0, layerIndex).forEach((layer) => {
+      renderContainers(yard, layer.containers, { onionSkin: true });
+    });
+  }
+  renderContainers(yard, containers, { onionSkin: false });
   if (
     previouslySelected &&
     containers.some((container) => container.id === previouslySelected)
@@ -1069,86 +1212,26 @@ function renderGrid(yard) {
   els.yardSvg.appendChild(background);
 }
 
-function renderEntrances(yard) {
-  if (!yard || !Array.isArray(yard.entrances) || yard.entrances.length === 0) {
-    return;
-  }
-  const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  group.classList.add('entrance-layer');
-  const sorted = yard.entrances.slice().sort((a, b) => a.sequence - b.sequence);
-  const depthBase = Math.max(convertFtToUnit(ENTRANCE_DEPTH_FT, yard.unit), convertFtToUnit(2, yard.unit));
-
-  sorted.forEach((entrance) => {
-    const edge = DOOR_EDGES.includes(entrance.edge) ? entrance.edge : 'south';
-    const offset = Math.min(Math.max(Number(entrance.offset) || 0, 0), 1);
-    const length = clampEntranceWidth(entrance.width, edge, yard);
-    const displayName = entrance.name || `Entrance ${entrance.sequence}`;
-
-    let x = 0;
-    let y = 0;
-    let width = length;
-    let height = depthBase;
-
-    if (edge === 'north' || edge === 'south') {
-      width = Math.min(length, yard.width);
-      height = Math.min(depthBase, yard.height);
-      const maxX = Math.max(yard.width - width, 0);
-      x = Math.min(Math.max(offset * maxX, 0), maxX);
-      y = edge === 'north' ? 0 : Math.max(yard.height - height, 0);
-    } else {
-      height = Math.min(length, yard.height);
-      width = Math.min(depthBase, yard.width);
-      const maxY = Math.max(yard.height - height, 0);
-      y = Math.min(Math.max(offset * maxY, 0), maxY);
-      x = edge === 'west' ? 0 : Math.max(yard.width - width, 0);
-    }
-
-    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    rect.classList.add('entrance-rect');
-    rect.setAttribute('x', x);
-    rect.setAttribute('y', y);
-    rect.setAttribute('width', width);
-    rect.setAttribute('height', height);
-    rect.setAttribute('rx', Math.min(width, height) * 0.2);
-    rect.setAttribute('ry', Math.min(width, height) * 0.2);
-    const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-    title.textContent = displayName;
-    rect.appendChild(title);
-
-    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    label.classList.add('entrance-label');
-    const centerX = x + width / 2;
-    const centerY = y + height / 2;
-    label.setAttribute('x', centerX);
-    label.setAttribute('y', centerY);
-    label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('dominant-baseline', 'middle');
-    label.textContent = displayName;
-    if (edge === 'east' || edge === 'west') {
-      label.classList.add('is-vertical');
-    }
-
-    group.appendChild(rect);
-    group.appendChild(label);
-  });
-
-  els.yardSvg.appendChild(group);
-}
-
-function renderContainers(yard, containers) {
+function renderContainers(yard, containers, options = {}) {
+  const onionSkin = Boolean(options.onionSkin);
   containers.forEach((container) => {
+    ensureContainerCustomValues(yard, container);
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     group.classList.add('container-group');
     group.dataset.id = container.id;
     group.dataset.type = container.type;
     group.classList.toggle('is-occupied', Boolean(container.occupied));
-    group.setAttribute('tabindex', '0');
-    group.setAttribute('role', 'button');
-    group.setAttribute('aria-label', `${container.label} container`);
+    if (onionSkin) {
+      group.classList.add('onion-skin');
+      group.setAttribute('tabindex', '-1');
+      group.setAttribute('aria-hidden', 'true');
+    } else {
+      group.setAttribute('tabindex', '0');
+      group.setAttribute('role', 'button');
+      group.setAttribute('aria-label', `${container.label} container`);
+    }
 
     const dims = getContainerDimensions(yard, container);
-    const fill = container.occupied ? '#22c55e' : '#ef4444';
-    const stroke = container.occupied ? '#15803d' : '#b91c1c';
 
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.classList.add('container-rect');
@@ -1156,9 +1239,6 @@ function renderContainers(yard, containers) {
     rect.setAttribute('height', dims.height);
     rect.setAttribute('rx', 0.2);
     rect.setAttribute('ry', 0.2);
-    rect.setAttribute('fill', fill);
-    rect.setAttribute('stroke', stroke);
-    rect.setAttribute('stroke-width', 0.1);
 
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.classList.add('container-label');
@@ -1188,13 +1268,15 @@ function renderContainers(yard, containers) {
     group.appendChild(text);
     setContainerTransform(group, container.x, container.y);
 
-    group.addEventListener('pointerdown', (event) => handleContainerPointerDown(event, container.id));
-    group.addEventListener('focus', () => selectContainer(container.id));
-    group.addEventListener('blur', () => {
-      if (selectedContainerId === container.id) {
-        selectContainer(null);
-      }
-    });
+    if (!onionSkin) {
+      group.addEventListener('pointerdown', (event) => handleContainerPointerDown(event, container.id));
+      group.addEventListener('focus', () => selectContainer(container.id));
+      group.addEventListener('blur', () => {
+        if (selectedContainerId === container.id) {
+          selectContainer(null);
+        }
+      });
+    }
 
     els.yardSvg.appendChild(group);
   });
@@ -1280,113 +1362,6 @@ function handleViewPointerUp(event) {
       }
     }
   }
-}
-
-function renderInventory() {
-  if (!els.inventoryBody) return;
-  const yard = getActiveYard();
-  els.inventoryBody.innerHTML = '';
-  if (!yard) {
-    const row = document.createElement('tr');
-    const cell = document.createElement('td');
-    cell.colSpan = 5;
-    cell.textContent = 'Create or select a yard to begin.';
-    row.appendChild(cell);
-    els.inventoryBody.appendChild(row);
-    return;
-  }
-  const containers = getAllContainers(yard);
-  if (containers.length === 0) {
-    const row = document.createElement('tr');
-    const cell = document.createElement('td');
-    cell.colSpan = 5;
-    cell.textContent = 'No containers placed yet.';
-    row.appendChild(cell);
-    els.inventoryBody.appendChild(row);
-    return;
-  }
-
-  const layerLookup = new Map();
-  yard.layers.forEach((layer) => {
-    layer.containers.forEach((container) => {
-      layerLookup.set(container.id, layer.name);
-    });
-  });
-
-  const sorted = [...containers].sort((a, b) => {
-    const numA = parseNumericLabel(a.label);
-    const numB = parseNumericLabel(b.label);
-    if (numA !== null && numB !== null && numA !== numB) {
-      return numA - numB;
-    }
-    const labelA = (a.label || `${a.widthFt}`).toLowerCase();
-    const labelB = (b.label || `${b.widthFt}`).toLowerCase();
-    return labelA.localeCompare(labelB);
-  });
-
-  sorted.forEach((container) => {
-    const row = document.createElement('tr');
-    row.classList.add(container.occupied ? 'occupied-row' : 'vacant-row');
-    const nameCell = document.createElement('td');
-    nameCell.setAttribute('scope', 'row');
-    const baseLabel = container.label && container.label.trim() ? container.label.trim() : `${container.widthFt} ft`;
-    nameCell.textContent = baseLabel;
-    const layerName = layerLookup.get(container.id);
-    if (layerName) {
-      const badge = document.createElement('span');
-      badge.className = 'layer-badge';
-      badge.textContent = layerName;
-      nameCell.appendChild(badge);
-    }
-
-    const sizeCell = document.createElement('td');
-    sizeCell.textContent = `${container.widthFt} ft`;
-
-    const renterCell = document.createElement('td');
-    renterCell.textContent = container.occupied
-      ? container.renter && container.renter.trim()
-        ? container.renter.trim()
-        : 'Occupied'
-      : 'Vacant';
-
-    const phoneCell = document.createElement('td');
-    phoneCell.textContent = container.occupied && container.phone ? container.phone : '—';
-
-    const rateCell = document.createElement('td');
-    rateCell.className = 'numeric';
-    const rateValue = parseFloat(container.monthlyRate);
-    rateCell.textContent = container.occupied && Number.isFinite(rateValue) ? formatCurrency(rateValue) : '—';
-
-    row.appendChild(nameCell);
-    row.appendChild(sizeCell);
-    row.appendChild(renterCell);
-    row.appendChild(phoneCell);
-    row.appendChild(rateCell);
-    els.inventoryBody.appendChild(row);
-  });
-}
-
-function renderOverview() {
-  if (!els.overviewCount || !els.overviewOccupied || !els.overviewRevenue) return;
-  const yard = getActiveYard();
-  if (!yard) {
-    els.overviewCount.textContent = '0';
-    els.overviewOccupied.textContent = '0';
-    els.overviewRevenue.textContent = '$0.00';
-    return;
-  }
-  const containers = getAllContainers(yard);
-  const total = containers.length;
-  const occupied = containers.filter((container) => container.occupied).length;
-  const revenue = containers.reduce((sum, container) => {
-    if (!container.occupied) return sum;
-    const value = parseFloat(container.monthlyRate);
-    return Number.isFinite(value) ? sum + value : sum;
-  }, 0);
-
-  els.overviewCount.textContent = `${total}`;
-  els.overviewOccupied.textContent = `${occupied}`;
-  els.overviewRevenue.textContent = formatCurrency(revenue);
 }
 
 function startPaletteDrag(event, type) {
@@ -1740,11 +1715,9 @@ function startYard(name, width, height, unit) {
     activeLayerId: baseLayer.id,
     nextContainerNumber: 1,
     defaultRates,
-    entrances: [],
-    nextEntranceNumber: 1,
+    customFields: [],
   };
   ensureNextContainerNumber(yard);
-  ensureNextEntranceNumber(yard);
   state.yards.push(yard);
   state.activeYardId = yard.id;
   saveState();
@@ -1796,20 +1769,16 @@ function handleDuplicateYard() {
     activeLayerId: null,
     defaultRates: sanitizeDefaultRates(yard.defaultRates),
     nextContainerNumber: 1,
-    entrances: Array.isArray(yard.entrances)
-      ? yard.entrances.map((entrance) => ({
-          ...entrance,
-          id: generateId(),
-        }))
-      : [],
-    nextEntranceNumber: 1,
+    customFields: sanitizeCustomFields(yard.customFields),
   };
   const targetLayer = clone.layers.find((layer) => layer.name === activeLayerName) || clone.layers[0] || null;
   if (targetLayer) {
     clone.activeLayerId = targetLayer.id;
   }
+  clone.layers.forEach((layer) => {
+    layer.containers.forEach((container) => ensureContainerCustomValues(clone, container));
+  });
   clone.nextContainerNumber = ensureNextContainerNumber(clone);
-  clone.nextEntranceNumber = ensureNextEntranceNumber(clone);
   state.yards.push(clone);
   state.activeYardId = clone.id;
   saveState();
@@ -1884,38 +1853,35 @@ function handleYardFormSubmit(event) {
 
 function updateDetailPanel() {
   const yard = getActiveYard();
-  if (!yard) {
-    els.containerForm.hidden = true;
-    setDetailFormDisabled(true);
-    els.containerForm.reset();
-    delete els.containerForm.dataset.containerId;
-    els.detailPlaceholder.hidden = false;
-    els.detailPlaceholder.innerHTML = '<p>Create a yard to edit container details.</p>';
+  const container = yard && selectedContainerId ? getContainerById(yard, selectedContainerId) : null;
+  if (!yard || !container) {
+    if (els.containerDetails) {
+      els.containerDetails.hidden = true;
+    }
+    if (els.containerForm) {
+      els.containerForm.hidden = true;
+      setDetailFormDisabled(true);
+      els.containerForm.reset();
+      delete els.containerForm.dataset.containerId;
+    }
     if (els.doorList) {
       els.doorList.innerHTML = '';
+    }
+    if (els.customFieldContainer) {
+      els.customFieldContainer.innerHTML = '';
     }
     if (els.addDoorBtn) {
       els.addDoorBtn.disabled = true;
     }
     return;
   }
-  const container = selectedContainerId ? getContainerById(yard, selectedContainerId) : null;
-  if (!container) {
-    els.containerForm.hidden = true;
-    setDetailFormDisabled(true);
-    els.containerForm.reset();
-    delete els.containerForm.dataset.containerId;
-    els.detailPlaceholder.hidden = false;
-    els.detailPlaceholder.innerHTML = '<p>Select a container to edit its info.</p>';
-    if (els.doorList) {
-      els.doorList.innerHTML = '';
-    }
-    if (els.addDoorBtn) {
-      els.addDoorBtn.disabled = true;
-    }
-    return;
+
+  if (els.containerDetails) {
+    els.containerDetails.hidden = false;
   }
-  els.detailPlaceholder.hidden = true;
+  if (els.detailPlaceholder) {
+    els.detailPlaceholder.hidden = true;
+  }
   els.containerForm.hidden = false;
   setDetailFormDisabled(false);
   els.containerForm.dataset.containerId = container.id;
@@ -1924,8 +1890,18 @@ function updateDetailPanel() {
   els.detailRenter.value = container.renter || '';
   els.detailRate.value = container.monthlyRate || '';
   els.detailPhone.value = container.phone || '';
+  if (els.detailEmail) {
+    els.detailEmail.value = container.email || '';
+  }
+  if (els.detailAddress) {
+    els.detailAddress.value = container.address || '';
+  }
+  if (els.detailStartDate) {
+    els.detailStartDate.value = container.startDate || '';
+  }
   els.detailOccupied.checked = Boolean(container.occupied);
   setOccupiedFieldState(Boolean(container.occupied));
+  renderCustomFieldInputs(yard, container);
   if (els.addDoorBtn) {
     els.addDoorBtn.disabled = false;
   }
@@ -1949,9 +1925,66 @@ function setDetailFormDisabled(disabled) {
   }
 }
 
+function renderCustomFieldInputs(yard, container) {
+  if (!els.customFieldContainer) return;
+  ensureContainerCustomValues(yard, container);
+  els.customFieldContainer.innerHTML = '';
+  const fields = Array.isArray(yard.customFields) ? yard.customFields : [];
+  if (!fields.length) {
+    const empty = document.createElement('p');
+    empty.className = 'custom-empty';
+    empty.textContent = 'No custom fields yet. Add fields in Settings.';
+    els.customFieldContainer.appendChild(empty);
+    return;
+  }
+
+  fields.forEach((field) => {
+    if (field.type === 'boolean') {
+      const wrapper = document.createElement('label');
+      wrapper.className = 'switch toggle-row';
+      wrapper.textContent = field.label;
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.customFieldId = field.id;
+      input.checked = Boolean(container.customValues?.[field.id]);
+      wrapper.insertBefore(input, wrapper.firstChild);
+      const slider = document.createElement('span');
+      slider.className = 'switch-slider';
+      wrapper.insertBefore(slider, wrapper.children[1]);
+      const status = document.createElement('span');
+      status.className = 'switch-label';
+      status.textContent = container.customValues?.[field.id] ? 'Enabled' : 'Disabled';
+      wrapper.appendChild(status);
+      input.addEventListener('change', () => {
+        status.textContent = input.checked ? 'Enabled' : 'Disabled';
+      });
+      els.customFieldContainer.appendChild(wrapper);
+    } else {
+      const row = document.createElement('div');
+      row.className = 'form-row';
+      const label = document.createElement('label');
+      label.textContent = field.label;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.dataset.customFieldId = field.id;
+      input.value = container.customValues?.[field.id] || '';
+      row.appendChild(label);
+      row.appendChild(input);
+      els.customFieldContainer.appendChild(row);
+    }
+  });
+}
+
 function setOccupiedFieldState(occupied) {
   if (!els.containerForm) return;
-  const targets = [els.detailRenter, els.detailRate, els.detailPhone];
+  const targets = [
+    els.detailRenter,
+    els.detailRate,
+    els.detailPhone,
+    els.detailEmail,
+    els.detailAddress,
+    els.detailStartDate,
+  ];
   targets.forEach((input) => {
     if (!input) return;
     input.disabled = !occupied;
@@ -1966,28 +1999,51 @@ function handleDetailInput(event) {
   const container = getContainerById(yard, selectedContainerId);
   if (!container) return;
   const target = event.target;
-  if (!(target instanceof HTMLInputElement)) {
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
     return;
   }
-  const { name, value } = target;
+
+  if (target.dataset.customFieldId) {
+    const fieldId = target.dataset.customFieldId;
+    if (!container.customValues) {
+      container.customValues = {};
+    }
+    container.customValues[fieldId] = target.type === 'checkbox' ? target.checked : target.value;
+    renderOccupantTable();
+    saveState();
+    return;
+  }
+
+  const { name } = target;
   switch (name) {
     case 'label':
-      container.label = value;
+      container.label = target.value;
       updateContainerLabelDisplay(container);
-      renderInventory();
+      renderOccupantTable();
       break;
     case 'renter':
-      container.renter = value;
-      renderInventory();
+      container.renter = target.value;
+      renderOccupantTable();
       break;
     case 'monthlyRate':
-      container.monthlyRate = value;
-      renderInventory();
-      renderOverview();
+      container.monthlyRate = target.value;
+      renderOccupantTable();
       break;
     case 'phone':
-      container.phone = value;
-      renderInventory();
+      container.phone = target.value;
+      renderOccupantTable();
+      break;
+    case 'email':
+      container.email = target.value;
+      renderOccupantTable();
+      break;
+    case 'address':
+      container.address = target.value;
+      renderOccupantTable();
+      break;
+    case 'startDate':
+      container.startDate = target.value;
+      renderOccupantTable();
       break;
     case 'occupied': {
       const checked = target.checked;
@@ -1997,22 +2053,24 @@ function handleDetailInput(event) {
         container.renter = '';
         container.monthlyRate = '';
         container.phone = '';
-        els.detailRenter.value = '';
-        els.detailRate.value = '';
-        els.detailPhone.value = '';
+        container.email = '';
+        container.address = '';
+        container.startDate = '';
+        if (els.detailRenter) els.detailRenter.value = '';
+        if (els.detailRate) els.detailRate.value = '';
+        if (els.detailPhone) els.detailPhone.value = '';
+        if (els.detailEmail) els.detailEmail.value = '';
+        if (els.detailAddress) els.detailAddress.value = '';
+        if (els.detailStartDate) els.detailStartDate.value = '';
       }
       renderActiveYard();
-      renderInventory();
-      renderOverview();
+      renderOccupantTable();
       break;
     }
     default:
       break;
   }
   saveState();
-  if (name !== 'occupied' && name !== 'monthlyRate') {
-    renderOverview();
-  }
 }
 
 function renderDoorList(container) {
@@ -2188,112 +2246,6 @@ function rotateContainerDoors(container, direction) {
   });
 }
 
-function handleAddEntrance() {
-  const yard = getActiveYard();
-  if (!yard) {
-    showHint('Create a yard before adding entrances.');
-    return;
-  }
-  yard.entrances = Array.isArray(yard.entrances) ? yard.entrances : [];
-  const sequence = ensureNextEntranceNumber(yard);
-  const defaultWidth = clampEntranceWidth(
-    convertFtToUnit(DEFAULT_ENTRANCE_WIDTH_FT, yard.unit),
-    'south',
-    yard
-  );
-  const entrance = {
-    id: generateId(),
-    edge: 'south',
-    offset: 0.5,
-    width: defaultWidth,
-    sequence,
-    name: `Entrance ${sequence}`,
-  };
-  yard.entrances.push(entrance);
-  ensureNextEntranceNumber(yard);
-  saveState();
-  renderEntranceList();
-  renderActiveYard();
-  showHint('Entrance added.');
-}
-
-function handleEntranceListInput(event) {
-  const yard = getActiveYard();
-  if (!yard) return;
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  const item = target.closest('[data-entrance-id]');
-  if (!item) return;
-  const entrance = getEntranceById(yard, item.dataset.entranceId);
-  if (!entrance) return;
-
-  let changed = false;
-  if (target instanceof HTMLInputElement && target.name === 'name') {
-    const next = target.value.trim();
-    entrance.name = next || `Entrance ${entrance.sequence}`;
-    target.value = entrance.name;
-    changed = true;
-  } else if (target instanceof HTMLSelectElement && target.name === 'edge') {
-    const edge = DOOR_EDGES.includes(target.value) ? target.value : entrance.edge;
-    if (edge !== entrance.edge) {
-      entrance.edge = edge;
-      entrance.width = clampEntranceWidth(entrance.width, edge, yard);
-      const widthInput = item.querySelector('input[name="width"]');
-      if (widthInput) {
-        widthInput.value = formatNumber(entrance.width);
-      }
-      changed = true;
-    }
-  } else if (target instanceof HTMLInputElement && target.name === 'width') {
-    if (target.value === '') {
-      return;
-    }
-    const value = Number(target.value);
-    if (Number.isFinite(value)) {
-      entrance.width = clampEntranceWidth(value, entrance.edge, yard);
-      target.value = formatNumber(entrance.width);
-      changed = true;
-    }
-  } else if (target instanceof HTMLInputElement && target.name === 'offset') {
-    const value = Number(target.value);
-    if (Number.isFinite(value)) {
-      const clamped = Math.min(Math.max(value, 0), 100) / 100;
-      entrance.offset = clamped;
-      const display = item.querySelector('.entrance-offset-value');
-      if (display) {
-        display.textContent = `${Math.round(clamped * 100)}%`;
-      }
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    saveState();
-    renderActiveYard();
-  }
-}
-
-function handleEntranceListClick(event) {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  if (!target.matches('[data-action="remove-entrance"]')) return;
-  const yard = getActiveYard();
-  if (!yard) return;
-  const item = target.closest('[data-entrance-id]');
-  if (!item) return;
-  const entranceId = item.dataset.entranceId;
-  if (!entranceId) return;
-  yard.entrances = Array.isArray(yard.entrances) ? yard.entrances : [];
-  const index = yard.entrances.findIndex((entry) => entry.id === entranceId);
-  if (index === -1) return;
-  yard.entrances.splice(index, 1);
-  ensureNextEntranceNumber(yard);
-  saveState();
-  renderEntranceList();
-  renderActiveYard();
-  showHint('Entrance removed.');
-}
-
 function updateContainerLabelDisplay(container) {
   const group = els.yardSvg.querySelector(`.container-group[data-id="${container.id}"]`);
   if (!group) {
@@ -2329,7 +2281,7 @@ function handleGlobalKeyDown(event) {
 function selectContainer(containerId) {
   selectedContainerId = containerId;
   Array.from(els.yardSvg.querySelectorAll('.container-group')).forEach((group) => {
-    group.classList.toggle('selected', group.dataset.id === containerId);
+    group.classList.toggle('is-selected', group.dataset.id === containerId);
   });
   updateDetailPanel();
 }
@@ -2359,6 +2311,12 @@ function getActiveYard() {
 }
 
 function createContainerFromType(yard, type) {
+  const customValues = {};
+  if (yard && Array.isArray(yard.customFields)) {
+    yard.customFields.forEach((field) => {
+      customValues[field.id] = field.type === 'boolean' ? false : '';
+    });
+  }
   return {
     id: generateId(),
     type: type.type,
@@ -2370,8 +2328,12 @@ function createContainerFromType(yard, type) {
     renter: '',
     monthlyRate: yard?.defaultRates?.[type.type] ?? '',
     phone: '',
+    email: '',
+    address: '',
+    startDate: '',
     occupied: false,
     doors: [],
+    customValues,
   };
 }
 
@@ -2394,16 +2356,6 @@ function gridUnit(unit) {
 
 function convertFtToUnit(value, unit) {
   return value * ftToUnitFactor[unit];
-}
-
-function clampEntranceWidth(width, edge, yard) {
-  if (!yard) return width;
-  const dimension = edge === 'north' || edge === 'south' ? yard.width : yard.height;
-  const minWidth = Math.min(convertFtToUnit(6, yard.unit), dimension);
-  const safeMin = minWidth > 0 ? minWidth : dimension;
-  const raw = Number.isFinite(width) ? width : safeMin;
-  const clamped = Math.min(Math.max(raw, safeMin), dimension);
-  return Number(clamped.toFixed(3));
 }
 
 function getContainerDimensions(yard, container) {
@@ -2543,13 +2495,6 @@ function setContainerTransform(group, x, y) {
 function getContainerById(yard, id) {
   const entry = findContainerEntry(yard, id);
   return entry ? entry.container : null;
-}
-
-function getEntranceById(yard, id) {
-  if (!yard || !id || !Array.isArray(yard.entrances)) {
-    return null;
-  }
-  return yard.entrances.find((entrance) => entrance.id === id) || null;
 }
 
 function createGhost(type) {
