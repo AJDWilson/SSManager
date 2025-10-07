@@ -954,7 +954,7 @@ textarea {
 .container-rect {
   fill: var(--container-available);
   stroke: var(--container-available-stroke);
-  stroke-width: 1.2;
+  stroke-width: 0;
   rx: 0;
   ry: 0;
 }
@@ -974,12 +974,12 @@ textarea {
 .container-outline {
   fill: none;
   stroke: rgba(37, 99, 235, 0.8);
-  stroke-width: 2;
+  stroke-width: 0;
   stroke-dasharray: 6 4;
 }
 
 .container-group.is-selected .container-rect {
-  stroke-width: 1.8;
+  stroke-width: 0;
 }
 
 .container-group.is-selected.is-occupied .container-rect {
