@@ -20,9 +20,9 @@
   --radius-md: 12px;
   --radius-sm: 8px;
   --container-available: #dc2626;
-  --container-available-stroke: #f87171;
+  --container-available-stroke: #b52020;
   --container-occupied: #16a34a;
-  --container-occupied-stroke: #4ade80;
+  --container-occupied-stroke: #0f7b37;
 }
 
 .app-shell[data-theme='dark'] {
@@ -39,9 +39,9 @@
   --accent-strong: #3b82f6;
   --shadow: 0 18px 40px rgba(2, 6, 23, 0.5);
   --container-available: #dc2626;
-  --container-available-stroke: #fca5a5;
+  --container-available-stroke: #b52020;
   --container-occupied: #16a34a;
-  --container-occupied-stroke: #86efac;
+  --container-occupied-stroke: #0f7b37;
 }
 
 * {
