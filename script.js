@@ -1201,6 +1201,7 @@ function renderGrid(yard) {
   path.setAttribute('fill', 'none');
   path.setAttribute('stroke', gridStroke);
   path.setAttribute('stroke-width', gridStrokeWidth);
+  path.setAttribute('vector-effect', 'non-scaling-stroke');
   path.setAttribute('shape-rendering', 'crispEdges');
 
   pattern.appendChild(path);
@@ -1213,6 +1214,7 @@ function renderGrid(yard) {
   background.setAttribute('fill', 'url(#grid-pattern)');
   background.setAttribute('stroke', borderStroke);
   background.setAttribute('stroke-width', 0.1);
+  background.setAttribute('vector-effect', 'non-scaling-stroke');
   els.yardSvg.appendChild(background);
 }
 
