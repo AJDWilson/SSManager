@@ -41,6 +41,7 @@ let selectedContainerId = null;
 let currentDrag = null;
 let hintTimeout = null;
 let lastRenderedYardId = null;
+let currentGridElements = null;
 
 const panState = {
   active: false,
@@ -1093,6 +1094,7 @@ function renderActiveYard() {
     els.emptyState.style.display = hasYard ? 'none' : '';
   }
   if (!yard) {
+    currentGridElements = null;
     resetViewTransform();
     lastRenderedYardId = null;
     state.baseScale = 1;
@@ -1177,6 +1179,7 @@ function applyViewTransform() {
   els.yardSvg.style.transformOrigin = '0 0';
   els.yardSvg.style.transform = transform;
   state.scale = state.baseScale * state.view.zoom;
+  updateGridStroke();
 }
 
 function resetViewTransform() {
@@ -1195,12 +1198,11 @@ function renderGrid(yard) {
   pattern.setAttribute('width', gridSize);
   pattern.setAttribute('height', gridSize);
 
-  const gridStrokeWidth = Math.max(1, Math.min(gridSize * 0.05, 2));
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.setAttribute('d', `M ${gridSize} 0 L 0 0 0 ${gridSize}`);
   path.setAttribute('fill', 'none');
   path.setAttribute('stroke', gridStroke);
-  path.setAttribute('stroke-width', gridStrokeWidth);
+  path.setAttribute('stroke-width', 1);
   path.setAttribute('vector-effect', 'non-scaling-stroke');
   path.setAttribute('shape-rendering', 'crispEdges');
 
@@ -1213,9 +1215,29 @@ function renderGrid(yard) {
   background.setAttribute('height', yard.height);
   background.setAttribute('fill', 'url(#grid-pattern)');
   background.setAttribute('stroke', borderStroke);
-  background.setAttribute('stroke-width', Math.max(1, Math.min(gridSize * 0.1, 2)));
+  background.setAttribute('stroke-width', 1.5);
   background.setAttribute('vector-effect', 'non-scaling-stroke');
   els.yardSvg.appendChild(background);
+
+  currentGridElements = {
+    gridSize,
+    path,
+    background,
+  };
+  updateGridStroke();
+}
+
+function updateGridStroke() {
+  if (!currentGridElements) return;
+  const { gridSize, path, background } = currentGridElements;
+  const zoom = Math.min(Math.max(state.view.zoom, ZOOM_MIN), ZOOM_MAX);
+  const baseScale = state.baseScale || 1;
+  const targetGridPx = 1.2;
+  const targetBorderPx = 1.6;
+  const gridWidthUnits = targetGridPx / (baseScale * zoom);
+  const borderWidthUnits = targetBorderPx / (baseScale * zoom);
+  path.setAttribute('stroke-width', Math.max(gridWidthUnits, gridSize * 0.001));
+  background.setAttribute('stroke-width', Math.max(borderWidthUnits, gridSize * 0.001));
 }
 
 function renderContainers(yard, containers, options = {}) {
