@@ -2285,11 +2285,22 @@ function handleGlobalKeyDown(event) {
 
 
 
+function bringContainerGroupToFront(containerId) {
+  if (!containerId) return;
+  const group = els.yardSvg.querySelector(`.container-group[data-id="${containerId}"]`);
+  if (group && group.parentNode && group.parentNode.lastChild !== group) {
+    group.parentNode.appendChild(group);
+  }
+}
+
 function selectContainer(containerId) {
   selectedContainerId = containerId;
   Array.from(els.yardSvg.querySelectorAll('.container-group')).forEach((group) => {
     group.classList.toggle('is-selected', group.dataset.id === containerId);
   });
+  if (containerId) {
+    bringContainerGroupToFront(containerId);
+  }
   updateDetailPanel();
 }
 
