@@ -1036,3 +1036,31 @@ textarea {
     order: 1;
   }
 }
+/* ===== Container visual tweaks (overrides) ===================== */
+/* nicer red for available, thin dark outline for both states */
+/* Available (unoccupied) outline color */
+:root {
+  --container-available-stroke: #940f0f;   /* available only */
+  --container-occupied-stroke:  #1f2937;   /* keep occupied dark */
+}
+
+/* Dark theme: same available color */
+.app-shell[data-theme='dark'] {
+  --container-available-stroke: #940f0f;
+  --container-occupied-stroke:  #1f2937;   /* or keep #940f0f if you want both red */
+}
+
+.container-rect {
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  paint-order: stroke fill;
+}
+.container-group.is-selected .container-rect {
+  stroke-width: 2 !important;
+}
+
+.container-group.is-selected {
+  filter:
+    drop-shadow(0 0 0.4rem rgba(59, 130, 246, 0.60))
+    drop-shadow(0 0 0.9rem rgba(59, 130, 246, 0.35));
+}
