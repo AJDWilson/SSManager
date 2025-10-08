@@ -1239,22 +1239,19 @@ function updateGridStroke() {
   } = currentGridElements;
   const zoom = Math.min(Math.max(state.view.zoom, ZOOM_MIN), ZOOM_MAX);
   const baseScale = state.baseScale || 1;
-  const baseSpacingPx = baseSize * baseScale * zoom;
-  const visibilityThreshold = 8;
-  const spacing = baseSpacingPx < visibilityThreshold ? baseSize * 2 : baseSize;
 
-  if (currentGridElements.currentSize !== spacing) {
-    pattern.setAttribute('width', spacing);
-    pattern.setAttribute('height', spacing);
-    path.setAttribute('d', `M ${spacing} 0 L 0 0 0 ${spacing}`);
-    currentGridElements.currentSize = spacing;
+  if (currentGridElements.currentSize !== baseSize) {
+    pattern.setAttribute('width', baseSize);
+    pattern.setAttribute('height', baseSize);
+    path.setAttribute('d', `M ${baseSize} 0 L 0 0 0 ${baseSize}`);
+    currentGridElements.currentSize = baseSize;
   }
 
   const targetGridPx = 1.2;
   const targetBorderPx = 1.6;
   const gridWidthUnits = targetGridPx / (baseScale * zoom);
   const borderWidthUnits = targetBorderPx / (baseScale * zoom);
-  path.setAttribute('stroke-width', Math.max(gridWidthUnits, spacing * 0.001));
+  path.setAttribute('stroke-width', Math.max(gridWidthUnits, baseSize * 0.001));
   background.setAttribute('stroke-width', Math.max(borderWidthUnits, baseSize * 0.001));
 }
 
