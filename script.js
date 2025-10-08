@@ -1195,7 +1195,7 @@ function renderGrid(yard) {
   pattern.setAttribute('width', gridSize);
   pattern.setAttribute('height', gridSize);
 
-  const gridStrokeWidth = Math.min(gridSize * 0.05, 0.1);
+  const gridStrokeWidth = Math.max(1, Math.min(gridSize * 0.05, 2));
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.setAttribute('d', `M ${gridSize} 0 L 0 0 0 ${gridSize}`);
   path.setAttribute('fill', 'none');
@@ -1213,7 +1213,7 @@ function renderGrid(yard) {
   background.setAttribute('height', yard.height);
   background.setAttribute('fill', 'url(#grid-pattern)');
   background.setAttribute('stroke', borderStroke);
-  background.setAttribute('stroke-width', 0.1);
+  background.setAttribute('stroke-width', Math.max(1, Math.min(gridSize * 0.1, 2)));
   background.setAttribute('vector-effect', 'non-scaling-stroke');
   els.yardSvg.appendChild(background);
 }
