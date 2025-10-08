@@ -41,7 +41,6 @@ let selectedContainerId = null;
 let currentDrag = null;
 let hintTimeout = null;
 let lastRenderedYardId = null;
-let currentGridElements = null;
 
 const panState = {
   active: false,
@@ -1094,7 +1093,6 @@ function renderActiveYard() {
     els.emptyState.style.display = hasYard ? 'none' : '';
   }
   if (!yard) {
-    currentGridElements = null;
     resetViewTransform();
     lastRenderedYardId = null;
     state.baseScale = 1;
@@ -1179,7 +1177,6 @@ function applyViewTransform() {
   els.yardSvg.style.transformOrigin = '0 0';
   els.yardSvg.style.transform = transform;
   state.scale = state.baseScale * state.view.zoom;
-  updateGridStroke();
 }
 
 function resetViewTransform() {
@@ -1198,12 +1195,12 @@ function renderGrid(yard) {
   pattern.setAttribute('width', gridSize);
   pattern.setAttribute('height', gridSize);
 
+  const gridStrokeWidth = Math.min(gridSize * 0.05, 0.1);
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', `M ${gridSize} 0 L 0 0 0 ${gridSize}`);
+  path.setAttribute('d', `M 0 ${gridSize} H ${gridSize} M ${gridSize} 0 V ${gridSize}`);
   path.setAttribute('fill', 'none');
   path.setAttribute('stroke', gridStroke);
-  path.setAttribute('stroke-width', 1);
-  path.setAttribute('vector-effect', 'non-scaling-stroke');
+  path.setAttribute('stroke-width', gridStrokeWidth);
   path.setAttribute('shape-rendering', 'crispEdges');
 
   pattern.appendChild(path);
@@ -1215,47 +1212,8 @@ function renderGrid(yard) {
   background.setAttribute('height', yard.height);
   background.setAttribute('fill', 'url(#grid-pattern)');
   background.setAttribute('stroke', borderStroke);
-  background.setAttribute('stroke-width', 1.5);
-  background.setAttribute('vector-effect', 'non-scaling-stroke');
+  background.setAttribute('stroke-width', 0.1);
   els.yardSvg.appendChild(background);
-
-  currentGridElements = {
-    baseSize: gridSize,
-    pattern,
-    path,
-    background,
-  };
-  updateGridStroke();
-}
-
-function updateGridStroke() {
-  if (!currentGridElements) return;
-  const {
-    baseSize,
-    pattern,
-    path,
-    background,
-  } = currentGridElements;
-  const zoom = Math.min(Math.max(state.view.zoom, ZOOM_MIN), ZOOM_MAX);
-  const baseScale = state.baseScale || 1;
-  const spacing = baseSize;
-  pattern.setAttribute('width', spacing);
-  pattern.setAttribute('height', spacing);
-  path.setAttribute('d', `M ${spacing} 0 L 0 0 0 ${spacing}`);
-
-  const pxPerUnit = Math.max(baseScale * zoom, 1e-6);
-  const targetGridPx = 1.2;
-  const minGridPx = 0.75;
-  const targetBorderPx = 1.6;
-  const minBorderPx = 1;
-
-  const gridWidthUnits = targetGridPx / pxPerUnit;
-  const borderWidthUnits = targetBorderPx / pxPerUnit;
-  const minGridUnits = minGridPx / pxPerUnit;
-  const minBorderUnits = minBorderPx / pxPerUnit;
-
-  path.setAttribute('stroke-width', Math.max(gridWidthUnits, minGridUnits));
-  background.setAttribute('stroke-width', Math.max(borderWidthUnits, minBorderUnits));
 }
 
 function renderContainers(yard, containers, options = {}) {
@@ -2325,22 +2283,11 @@ function handleGlobalKeyDown(event) {
 
 
 
-function bringContainerGroupToFront(containerId) {
-  if (!containerId) return;
-  const group = els.yardSvg.querySelector(`.container-group[data-id="${containerId}"]`);
-  if (group && group.parentNode && group.parentNode.lastChild !== group) {
-    group.parentNode.appendChild(group);
-  }
-}
-
 function selectContainer(containerId) {
   selectedContainerId = containerId;
   Array.from(els.yardSvg.querySelectorAll('.container-group')).forEach((group) => {
     group.classList.toggle('is-selected', group.dataset.id === containerId);
   });
-  if (containerId) {
-    bringContainerGroupToFront(containerId);
-  }
   updateDetailPanel();
 }
 

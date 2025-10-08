@@ -125,10 +125,6 @@ body {
   box-shadow: var(--shadow);
 }
 
-.app-shell[data-theme='dark'] .tab-nav {
-  background: var(--header-background);
-}
-
 .tab-link {
   border: none;
   background: transparent;
@@ -459,7 +455,20 @@ p.section-hint {
   height: 100%;
   min-height: 480px;
   display: block;
-  background: none;
+  background: repeating-linear-gradient(
+      0deg,
+      rgba(148, 163, 184, 0.14),
+      rgba(148, 163, 184, 0.14) 1px,
+      transparent 1px,
+      transparent 32px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.14),
+      rgba(148, 163, 184, 0.14) 1px,
+      transparent 1px,
+      transparent 32px
+    );
   touch-action: none;
 }
 
@@ -1036,6 +1045,7 @@ textarea {
     order: 1;
   }
 }
+
 /* ===== Container visual tweaks (overrides) ===================== */
 /* nicer red for available, thin dark outline for both states */
 /* Available (unoccupied) outline color */
