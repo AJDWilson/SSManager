@@ -1276,7 +1276,6 @@ function renderContainers(yard, containers, options = {}) {
     if (!onionSkin) {
       group.addEventListener('pointerdown', (event) => handleContainerPointerDown(event, container.id));
       group.addEventListener('focus', () => selectContainer(container.id));
-      // ** FIX: Removed the blur event listener here so clicking form fields won't deselect the container
     }
 
     els.yardSvg.appendChild(group);
@@ -2206,341 +2205,259 @@ function handleDoorListClick(event) {
   if (!target.matches('.door-remove')) return;
   if (target.disabled) return;
   if (!selectedContainerId) return;
+  
   const yard = getActiveYard();
   if (!yard) return;
+  
   const container = getContainerById(yard, selectedContainerId);
   if (!container || !Array.isArray(container.doors)) return;
+  
   const item = target.closest('[data-door-id]');
   if (!item) return;
+  
   const doorId = item.dataset.doorId;
   const index = container.doors.findIndex((door) => door.id === doorId);
   if (index === -1) return;
+  
   container.doors.splice(index, 1);
   saveState();
   renderDoorList(container);
   refreshContainerDoors(container);
 }
 
-function rotateContainerDoors(container, direction) {
-  if (!container || !Array.isArray(container.doors) || container.doors.length === 0) {
-    return;
+// -------------------------------------------------------------------------
+// Missing Application Utility Functions Appended Below
+// -------------------------------------------------------------------------
+
+function getActiveYard() {
+  return state.yards.find((yard) => yard.id === state.activeYardId) || null;
+}
+
+function getContainerById(yard, id) {
+  for (const layer of yard.layers) {
+    const found = layer.containers.find(c => c.id === id);
+    if (found) return found;
   }
-  const clockwise = {
-    north: 'east',
-    east: 'south',
-    south: 'west',
-    west: 'north',
+  return null;
+}
+
+function generateId() {
+  return Math.random().toString(36).substring(2, 10);
+}
+
+function formatCurrency(amount) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+}
+
+function formatNumber(num) {
+  return Number(num).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function convertFtToUnit(ft, unit) {
+  return ft * (ftToUnitFactor[unit] || 1);
+}
+
+function gridUnit(unit) {
+  return convertFtToUnit(1, unit); // 1 foot grid step
+}
+
+function getContainerDimensions(yard, container) {
+  const w = container.rotation === 90 ? containerDepthFt : container.widthFt;
+  const h = container.rotation === 90 ? container.widthFt : containerDepthFt;
+  return {
+    width: convertFtToUnit(w, yard.unit),
+    height: convertFtToUnit(h, yard.unit)
   };
-  const counter = {
-    north: 'west',
-    west: 'south',
-    south: 'east',
-    east: 'north',
+}
+
+function snapValue(val, unit) {
+  const step = gridUnit(unit);
+  return Math.round(val / step) * step;
+}
+
+function clampToBounds(pos, w, h, yard) {
+  return {
+    x: Math.max(0, Math.min(pos.x, yard.width - w)),
+    y: Math.max(0, Math.min(pos.y, yard.height - h))
   };
-  container.doors.forEach((door) => {
-    const current = DOOR_EDGES.includes(door.edge) ? door.edge : 'north';
-    if (direction === 'counterclockwise') {
-      door.edge = counter[current];
-    } else {
-      door.edge = clockwise[current];
+}
+
+function isCollision(yard, container, skipId, layer) {
+  if (!layer) return false;
+  const dims1 = getContainerDimensions(yard, container);
+  const rect1 = { x: container.x, y: container.y, w: dims1.width, h: dims1.height };
+  for (const other of layer.containers) {
+    if (other.id === skipId) continue;
+    const dims2 = getContainerDimensions(yard, other);
+    const rect2 = { x: other.x, y: other.y, w: dims2.width, h: dims2.height };
+    // AABB collision detection
+    if (rect1.x < rect2.x + rect2.w && rect1.x + rect1.w > rect2.x &&
+        rect1.y < rect2.y + rect2.h && rect1.y + rect1.h > rect2.y) {
+      return true;
     }
-  });
+  }
+  return false;
+}
+
+function findNearestSpot(yard, layer, container, w, h) {
+   const step = gridUnit(yard.unit);
+   for (let radius = step; radius < Math.max(yard.width, yard.height); radius += step) {
+     for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+       const nx = snapValue(container.x + Math.cos(angle) * radius, yard.unit);
+       const ny = snapValue(container.y + Math.sin(angle) * radius, yard.unit);
+       const clamped = clampToBounds({ x: nx, y: ny }, w, h, yard);
+       const candidate = { ...container, x: clamped.x, y: clamped.y };
+       if (!isCollision(yard, candidate, container.id, layer)) {
+         return clamped;
+       }
+     }
+   }
+   return null;
+}
+
+function yardPointerToUnits(event) {
+  const rect = els.yardSvg.getBoundingClientRect();
+  const scale = state.baseScale * state.view.zoom;
+  return {
+    x: (event.clientX - rect.left - state.view.panX) / scale,
+    y: (event.clientY - rect.top - state.view.panY) / scale
+  };
+}
+
+function setContainerTransform(element, x, y) {
+  element.setAttribute('transform', `translate(${x}, ${y})`);
+}
+
+function createDoorElement(yard, dims, door) {
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.classList.add('container-door');
+  const doorLength = convertFtToUnit(DOOR_LENGTH_FT, yard.unit);
+  const doorThickness = convertFtToUnit(DOOR_THICKNESS_FT, yard.unit);
+  let x, y, w, h;
+  if (door.edge === 'north') {
+    w = doorLength; h = doorThickness;
+    x = door.offset * dims.width - w / 2; y = 0;
+  } else if (door.edge === 'south') {
+    w = doorLength; h = doorThickness;
+    x = door.offset * dims.width - w / 2; y = dims.height - h;
+  } else if (door.edge === 'east') {
+    w = doorThickness; h = doorLength;
+    x = dims.width - w; y = door.offset * dims.height - h / 2;
+  } else if (door.edge === 'west') {
+    w = doorThickness; h = doorLength;
+    x = 0; y = door.offset * dims.height - h / 2;
+  }
+  
+  x = Math.max(0, Math.min(x, dims.width - w));
+  y = Math.max(0, Math.min(y, dims.height - h));
+  rect.setAttribute('x', x);
+  rect.setAttribute('y', y);
+  rect.setAttribute('width', w);
+  rect.setAttribute('height', h);
+  return rect;
 }
 
 function updateContainerLabelDisplay(container) {
   const group = els.yardSvg.querySelector(`.container-group[data-id="${container.id}"]`);
-  if (!group) {
-    renderActiveYard();
-    return;
-  }
-  const text = group.querySelector('.container-label');
-  const labelText = container.label && container.label.trim() ? container.label.trim() : `${container.widthFt}`;
-  if (text) {
-    text.textContent = labelText;
-  }
-  group.setAttribute('aria-label', `${labelText} container`);
-}
-
-function handleGlobalKeyDown(event) {
-  if (isModalOpen()) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeYardModal();
+  if (group) {
+    const text = group.querySelector('.container-label');
+    if (text) {
+      text.textContent = container.label && String(container.label).trim() ? String(container.label).trim() : `${container.widthFt}`;
     }
-    return;
   }
-  if (event.key === 'Escape' && selectedContainerId) {
-    event.preventDefault();
-    selectContainer(null);
-    return;
-  }
-  handleKeyDown(event);
 }
 
-function selectContainer(containerId) {
-  selectedContainerId = containerId;
-  Array.from(els.yardSvg.querySelectorAll('.container-group')).forEach((group) => {
-    group.classList.toggle('is-selected', group.dataset.id === containerId);
+function rotateContainerDoors(container, direction) {
+  if (!Array.isArray(container.doors)) return;
+  const transitions = direction === 'clockwise'
+    ? { north: 'east', east: 'south', south: 'west', west: 'north' }
+    : { north: 'west', west: 'south', south: 'east', east: 'north' };
+  container.doors.forEach(door => {
+    door.edge = transitions[door.edge];
   });
-  updateDetailPanel();
-}
-
-function getActiveYard() {
-  if (!state.yards.length) {
-    if (state.activeYardId) {
-      state.activeYardId = null;
-      saveState();
-    }
-    return null;
-  }
-
-  if (state.activeYardId) {
-    const match = state.yards.find((yard) => yard.id === state.activeYardId);
-    if (match) {
-      return match;
-    }
-  }
-
-  const fallbackId = state.yards[0].id;
-  if (state.activeYardId !== fallbackId) {
-    state.activeYardId = fallbackId;
-    saveState();
-  }
-  return state.yards[0] || null;
 }
 
 function createContainerFromType(yard, type) {
-  const customValues = {};
-  if (yard && Array.isArray(yard.customFields)) {
-    yard.customFields.forEach((field) => {
-      customValues[field.id] = field.type === 'boolean' ? false : '';
-    });
-  }
+  const typeDef = containerTypes.find(t => t.type === type) || containerTypes[0];
+  const defaultRates = yard.defaultRates || {};
+  const rate = defaultRates[type] || '';
   return {
     id: generateId(),
-    type: type.type,
-    widthFt: type.widthFt,
+    type: typeDef.type,
+    widthFt: typeDef.widthFt,
     x: 0,
     y: 0,
     rotation: 0,
     label: previewNextContainerLabel(yard),
     renter: '',
-    monthlyRate: yard?.defaultRates?.[type.type] ?? '',
+    monthlyRate: rate,
     phone: '',
     email: '',
     address: '',
     startDate: '',
     occupied: false,
     doors: [],
-    customValues,
+    customValues: {}
   };
 }
 
-function yardPointerToUnits(event) {
-  const rect = els.yardSvg.getBoundingClientRect();
-  return {
-    x: (event.clientX - rect.left) / state.scale,
-    y: (event.clientY - rect.top) / state.scale,
-  };
-}
-
-function snapValue(value, unit) {
-  const size = gridUnit(unit);
-  return Math.round(value / size) * size;
-}
-
-function gridUnit(unit) {
-  return convertFtToUnit(1, unit);
-}
-
-function convertFtToUnit(value, unit) {
-  return value * ftToUnitFactor[unit];
-}
-
-function getContainerDimensions(yard, container) {
-  const width = convertFtToUnit(container.widthFt, yard.unit);
-  const depth = convertFtToUnit(containerDepthFt, yard.unit);
-  if (container.rotation === 90) {
-    return { width: depth, height: width };
-  }
-  return { width, height: depth };
-}
-
-function createDoorElement(yard, dims, door) {
-  if (!door) return null;
-  const edge = DOOR_EDGES.includes(door.edge) ? door.edge : 'north';
-  let offset = Number(door.offset);
-  if (!Number.isFinite(offset)) {
-    offset = 0.5;
-  }
-  offset = Math.min(Math.max(offset, 0), 1);
-
-  const doorLength = convertFtToUnit(DOOR_LENGTH_FT, yard.unit);
-  const doorThickness = convertFtToUnit(DOOR_THICKNESS_FT, yard.unit);
-
-  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  rect.classList.add('container-door');
-
-  if (edge === 'north' || edge === 'south') {
-    const width = Math.min(doorLength, dims.width);
-    const height = Math.min(doorThickness, dims.height);
-    const maxX = Math.max(dims.width - width, 0);
-    const x = Math.min(Math.max(offset * maxX, 0), maxX);
-    const y = edge === 'north' ? 0 : Math.max(dims.height - height, 0);
-    rect.setAttribute('width', width);
-    rect.setAttribute('height', height);
-    rect.setAttribute('x', x);
-    rect.setAttribute('y', y);
-    rect.setAttribute('rx', Math.min(width, height) * 0.15);
-    rect.setAttribute('ry', Math.min(width, height) * 0.15);
-    return rect;
-  }
-
-  const width = Math.min(doorThickness, dims.width);
-  const height = Math.min(doorLength, dims.height);
-  const maxY = Math.max(dims.height - height, 0);
-  const y = Math.min(Math.max(offset * maxY, 0), maxY);
-  const x = edge === 'west' ? 0 : Math.max(dims.width - width, 0);
-  rect.setAttribute('width', width);
-  rect.setAttribute('height', height);
-  rect.setAttribute('x', x);
-  rect.setAttribute('y', y);
-  rect.setAttribute('rx', Math.min(width, height) * 0.15);
-  rect.setAttribute('ry', Math.min(width, height) * 0.15);
-  return rect;
-}
-
-function refreshContainerDoors(container) {
-  const yard = getActiveYard();
-  if (!yard || !container || !els.yardSvg) return;
-  const group = els.yardSvg.querySelector(`.container-group[data-id="${container.id}"]`);
-  if (!group) {
-    renderActiveYard();
-    return;
-  }
-  let doorGroup = group.querySelector('.door-group');
-  const label = group.querySelector('.container-label');
-  if (!doorGroup) {
-    doorGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    doorGroup.classList.add('door-group');
-    if (label) {
-      group.insertBefore(doorGroup, label);
-    } else {
-      group.appendChild(doorGroup);
-    }
-  }
-  while (doorGroup.firstChild) {
-    doorGroup.removeChild(doorGroup.firstChild);
-  }
-  const dims = getContainerDimensions(yard, container);
-  const doors = Array.isArray(container.doors) ? container.doors : [];
-  doors.forEach((door) => {
-    const doorElement = createDoorElement(yard, dims, door);
-    if (doorElement) {
-      doorGroup.appendChild(doorElement);
-    }
+function selectContainer(id) {
+  selectedContainerId = id;
+  const groups = els.yardSvg.querySelectorAll('.container-group');
+  groups.forEach(g => {
+    g.classList.toggle('is-selected', g.dataset.id === id);
   });
+  updateDetailPanel();
 }
 
-function clampToBounds(position, width, height, yard) {
-  return {
-    x: Math.min(Math.max(position.x, 0), Math.max(yard.width - width, 0)),
-    y: Math.min(Math.max(position.y, 0), Math.max(yard.height - height, 0)),
-  };
-}
-
-function isCollision(yard, candidate, ignoreId, layerOverride) {
-  const dims = getContainerDimensions(yard, candidate);
-  const layer = layerOverride || findContainerEntry(yard, candidate.id)?.layer || getActiveLayer(yard);
-  const containers = layer ? layer.containers : [];
-  return containers.some((container) => {
-    if (container.id === ignoreId) return false;
-    const otherDims = getContainerDimensions(yard, container);
-    return !(
-      candidate.x + dims.width <= container.x ||
-      candidate.x >= container.x + otherDims.width ||
-      candidate.y + dims.height <= container.y ||
-      candidate.y >= container.y + otherDims.height
-    );
-  });
-}
-
-function findNearestSpot(yard, layer, container, width, height) {
-  const startX = container.x;
-  const startY = container.y;
-  const step = gridUnit(yard.unit);
-  const maxRadius = Math.ceil(Math.max(yard.width, yard.height) / step) + 2;
-  for (let radius = 0; radius <= maxRadius && radius < 60; radius++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      for (let dy = -radius; dy <= radius; dy++) {
-        if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-        const x = startX + dx * step;
-        const y = startY + dy * step;
-        const clamped = clampToBounds({ x, y }, width, height, yard);
-        const candidate = { ...container, x: clamped.x, y: clamped.y };
-        if (!isCollision(yard, candidate, container.id, layer)) {
-          return clamped;
-        }
-      }
-    }
-  }
-  return null;
-}
-
-function setContainerTransform(group, x, y) {
-  group.setAttribute('transform', `translate(${x}, ${y})`);
-}
-
-function getContainerById(yard, id) {
-  const entry = findContainerEntry(yard, id);
-  return entry ? entry.container : null;
+function showHint(msg) {
+  if (!els.hint) return;
+  els.hint.textContent = msg;
+  els.hint.classList.add('visible');
+  clearTimeout(hintTimeout);
+  hintTimeout = setTimeout(() => els.hint.classList.remove('visible'), 3000);
 }
 
 function createGhost(type) {
   const ghost = document.createElement('div');
-  ghost.className = 'drag-ghost';
-  ghost.textContent = `${type.widthFt} ft`;
-  ghost.style.borderColor = '#94a3b8';
+  ghost.className = 'palette-item ghost';
+  ghost.style.position = 'fixed';
+  ghost.style.pointerEvents = 'none';
+  ghost.style.opacity = '0.7';
+  ghost.style.zIndex = '1000';
+  ghost.textContent = `${type} container`;
   return ghost;
 }
 
-function showHint(message) {
-  if (!message) return;
-  els.hint.textContent = message;
-  els.hint.classList.add('visible');
-  if (hintTimeout) window.clearTimeout(hintTimeout);
-  hintTimeout = window.setTimeout(() => {
-    els.hint.classList.remove('visible');
-  }, 1800);
-}
-
-function formatNumber(value) {
-  const rounded = Math.round(value * 1000) / 1000;
-  return Number(rounded.toString()).toString();
-}
-
-function formatCurrency(value) {
-  const safe = Number.isFinite(value) ? value : 0;
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-  }).format(safe);
-}
-
-function generateId() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function applyTheme() {
-  if (!els.appShell || !els.themeToggle) return;
-  const theme = state.theme === 'dark' ? 'dark' : 'light';
-  els.appShell.setAttribute('data-theme', theme);
-  if (document.documentElement) {
-    document.documentElement.setAttribute('data-theme', theme);
+  if (els.appShell) {
+    els.appShell.dataset.theme = state.theme;
   }
-  if (document.body) {
-    document.body.setAttribute('data-theme', theme);
+  if (els.themeToggle) {
+    els.themeToggle.checked = state.theme === 'dark';
   }
-  els.themeToggle.checked = theme === 'dark';
+}
+
+function refreshContainerDoors(container) {
+  const yard = getActiveYard();
+  if (!yard) return;
+  const group = els.yardSvg.querySelector(`.container-group[data-id="${container.id}"]`);
+  if (!group) return;
+  let doorGroup = group.querySelector('.door-group');
+  if (doorGroup) doorGroup.remove();
+  doorGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  doorGroup.classList.add('door-group');
+  const dims = getContainerDimensions(yard, container);
+  const doors = Array.isArray(container.doors) ? container.doors : [];
+  doors.forEach(door => {
+    const el = createDoorElement(yard, dims, door);
+    if (el) doorGroup.appendChild(el);
+  });
+  if (doorGroup.childNodes.length > 0) {
+    group.insertBefore(doorGroup, group.querySelector('.container-label'));
+  }
+}
+
+function handleGlobalKeyDown(event) {
+  handleKeyDown(event);
 }
