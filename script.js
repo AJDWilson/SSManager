@@ -1276,11 +1276,7 @@ function renderContainers(yard, containers, options = {}) {
     if (!onionSkin) {
       group.addEventListener('pointerdown', (event) => handleContainerPointerDown(event, container.id));
       group.addEventListener('focus', () => selectContainer(container.id));
-      group.addEventListener('blur', () => {
-        if (selectedContainerId === container.id) {
-          selectContainer(null);
-        }
-      });
+      // ** FIX: Removed the blur event listener here so clicking form fields won't deselect the container
     }
 
     els.yardSvg.appendChild(group);
@@ -2280,8 +2276,6 @@ function handleGlobalKeyDown(event) {
   }
   handleKeyDown(event);
 }
-
-
 
 function selectContainer(containerId) {
   selectedContainerId = containerId;
